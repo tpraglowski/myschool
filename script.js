@@ -157,11 +157,21 @@ async function loadAccounts() {
     accounts = normalizeAccounts(snap.docs.map((d) => d.data()));
     return;
   }
-  // One-time migration from the old single-array "store/accounts" doc (or pre-Firestore
-  // localStorage data) into one document per account, the very first time this runs.
+  // The accounts collection is empty. That's either (a) this project has never been
+  // migrated yet, or (b) migration already ran and every account has since been deleted
+  // for real. A Firestore-side marker (not localStorage, which is per-browser and can
+  // hold stale leftovers forever) tells them apart, so a legitimate "no accounts left"
+  // state is never mistaken for "never migrated" and silently repopulated from old data.
+  const migrationMarker = doc(db, 'store', 'accountsMigrated');
+  const markerSnap = await getDoc(migrationMarker);
+  if (markerSnap.exists()) {
+    accounts = [];
+    return;
+  }
   const legacyDoc = await getDoc(storeDoc('accounts'));
   const migrated = normalizeAccounts(legacyDoc.exists() ? legacyDoc.data().value : legacyAccounts);
   await Promise.all(migrated.map((a) => setDoc(accountDocRef(a.name), a)));
+  await setDoc(migrationMarker, { done: true });
   accounts = migrated;
 }
 
