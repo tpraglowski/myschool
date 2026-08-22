@@ -45,6 +45,7 @@
     <section class="view" id="home">
       <h1 class="mb-1.5 text-[clamp(1.7em,4vw,2.5em)] font-extrabold leading-[1.08] tracking-tight">Dzień dobry!</h1>
       <p class="mb-6 text-muted">Wybierz, co chcesz teraz sprawdzić.</p>
+      <div class="mb-6 hidden rounded-2xl border-l-[5px] border-amber-500 bg-amber-50 px-5 py-4 text-amber-900" id="graduatedNotice"></div>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2" id="homeGrid">
         <button class="group relative min-h-[220px] overflow-hidden rounded-[25px] p-7 text-left text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" style="background:linear-gradient(135deg,#2563eb,#0ea5e9)" data-open="schedule">
           <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
@@ -139,6 +140,7 @@
         <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
           <div><h2 class="text-[1.2em] font-bold tracking-tight">Tryb wyglądu</h2><p class="mt-1 text-sm text-muted">Wybierz tryb jasny lub ciemny.</p></div>
           <div class="flex gap-2">
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="auto">◐ Auto</button>
             <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="light">☀ Jasny</button>
             <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="dark">☾ Ciemny</button>
           </div>
@@ -215,6 +217,16 @@
         <div class="grid gap-3" id="starterSubjectList"></div>
       </div>
     </section>
+
+    <footer class="mt-10 border-t border-line pt-6 text-sm text-muted">
+      <h2 class="mb-2 font-bold text-ink">Podziękowania</h2>
+      <ul class="grid gap-1">
+        <li><b class="text-ink">GitHub</b> — za przechowywanie strony</li>
+        <li><b class="text-ink">ChatGPT</b> — za zrobienie fundamentu projektu</li>
+        <li><b class="text-ink">Claude AI</b> — za dokończenie strony</li>
+        <li><b class="text-ink">Firebase</b> — za przechowywanie danych i za to, że je trzyma</li>
+      </ul>
+    </footer>
   </main>
 
   <dialog class="w-[min(460px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="editor">
@@ -353,6 +365,17 @@
       <div class="mt-[21px] flex justify-end gap-[9px]">
         <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelStatus">Anuluj</button>
         <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" value="save">Zapisz status</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="w-[min(360px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="subjectColorEditor">
+    <form class="p-6" method="dialog">
+      <h2 class="mb-[18px] text-[1.35em] font-bold">Zmień kolor przedmiotu</h2>
+      <div class="flex flex-wrap gap-[9px]" id="subjectColorPicker"></div>
+      <div class="mt-[21px] flex justify-end gap-[9px]">
+        <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelSubjectColor">Anuluj</button>
+        <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" value="save">Zapisz</button>
       </div>
     </form>
   </dialog>

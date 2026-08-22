@@ -2,7 +2,7 @@
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
-import { getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+import { getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection, onSnapshot, runTransaction } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
 // ---------- Cloud data store (Firestore) ----------
 // Shared data lives in Firestore so every browser/device sees the same thing.
@@ -88,7 +88,7 @@ const normalizeSubjectsByClass = (byClass) => {
 const legacyStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
 const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
 const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
-const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, ...a }));
+const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, ...a }));
 
 const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements'];
 const seedValue = {
@@ -255,7 +255,7 @@ document.querySelector('[data-open="events"]').addEventListener('click', () => {
 
 // ---------- Subject / competence cards ----------
 const statusInfo = {
-  locked: { label: 'Nieodblokowane', color: 'linear-gradient(135deg,#64748b,#475569)' },
+  locked: { label: 'Nieodblokowane', color: 'linear-gradient(135deg,#facc15,#f59e0b)' },
   unlocked: { label: '⚠ Zdobądź mnie!', color: 'linear-gradient(135deg,#f97316,#ef4444)' },
   known: { label: 'Umiem', color: 'linear-gradient(135deg,#2563eb,#06b6d4)' },
   earned: { label: 'Zdobyta 👍', color: 'linear-gradient(135deg,#16a34a,#22c55e)' },
@@ -268,10 +268,12 @@ function card(item, type) {
   const body = type === 'subject'
     ? `Zdobyte: ${earned}/${item.competences.length}`
     : `<span class="mt-2 inline-block rounded-lg bg-white/25 px-2 py-1 text-[.78em] font-extrabold text-white">${status.label}</span>`;
-  const canDelete = isAdmin() || item.addedBy !== 'admin';
+  const canDelete = !isParent() && (isAdmin() || item.addedBy !== 'admin');
+  const canChangeColor = type === 'subject' && isParent();
   return `<article class="group relative min-h-[172px] cursor-pointer overflow-hidden rounded-[25px] p-5 text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" style="background:${background}" data-id="${item.id}" data-type="${type}" tabindex="0" role="button">
     <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
     ${canDelete ? `<button class="absolute right-3 top-3 z-10 rounded-lg bg-black/30 px-2 py-1 text-sm font-bold opacity-0 transition group-hover:opacity-100" title="Usuń" data-delete="${item.id}" data-type="${type}">Usuń</button>` : ''}
+    ${canChangeColor ? `<button class="absolute right-3 top-3 z-10 rounded-lg bg-black/30 px-2 py-1 text-sm font-bold opacity-0 transition group-hover:opacity-100" title="Zmień kolor" data-change-color="${item.id}">🎨</button>` : ''}
     <h2 class="relative mt-14 text-[1.3em] font-bold tracking-tight">${escapeHtml(item.name)}</h2>
     <p class="relative mt-1 text-[.9em] text-white/85">${body}</p>
   </article>`;
@@ -296,7 +298,7 @@ function renderCompetences() {
     ? subject.competences.map((x) => card(x, 'competence')).join('')
     : emptyState('Brak kompetencji', 'Dodaj pierwszą kompetencję dla tego przedmiotu.');
   bindCards(el);
-  const canAddCompetence = isAdmin() || subject.addedBy !== 'admin';
+  const canAddCompetence = !isParent() && (isAdmin() || subject.addedBy !== 'admin');
   document.querySelector('#addCompetence').classList.toggle('hidden', !canAddCompetence);
 }
 
@@ -329,12 +331,20 @@ function bindCards(el) {
         state.activeSubject = b.dataset.id;
         renderCompetences();
         show('detail');
-      } else {
+      } else if (!isParent()) {
         openStatusEditor(b.dataset.id);
       }
     };
     b.addEventListener('click', open);
     b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  });
+  el.querySelectorAll('[data-change-color]').forEach((b) => {
+    b.addEventListener('pointerdown', (e) => e.stopPropagation());
+    b.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openSubjectColorEditor(b.dataset.changeColor);
+    });
   });
 }
 
@@ -353,6 +363,36 @@ statusDialog.addEventListener('close', () => {
   activeCompetence.status = document.querySelector('#statusSelect').value;
   saveSubjectsByClass();
   renderCompetences();
+  renderSubjects();
+});
+
+// ---------- Subject colour editor (parents can restyle a subject card without being able to add/delete) ----------
+const subjectColorDialog = document.querySelector('#subjectColorEditor');
+let colorEditingSubjectId = null;
+let pendingSubjectColor = null;
+function renderSubjectColorPicker() {
+  document.querySelector('#subjectColorPicker').innerHTML = gradients.map((g, i) =>
+    `<button type="button" class="h-8 w-[43px] rounded-lg${g === pendingSubjectColor ? ' ring-2 ring-ink' : ''}" style="background:${g}" data-subject-gradient="${i}" aria-label="Gradient ${i + 1}"></button>`
+  ).join('');
+  document.querySelectorAll('[data-subject-gradient]').forEach((b) => b.addEventListener('click', () => {
+    pendingSubjectColor = gradients[b.dataset.subjectGradient];
+    renderSubjectColorPicker();
+  }));
+}
+function openSubjectColorEditor(id) {
+  const subject = subjectsForClass(viewingClass()).find((x) => x.id === id);
+  if (!subject) return;
+  colorEditingSubjectId = id;
+  pendingSubjectColor = subject.gradient;
+  renderSubjectColorPicker();
+  subjectColorDialog.showModal();
+}
+document.querySelector('#cancelSubjectColor').addEventListener('click', () => subjectColorDialog.close('cancel'));
+subjectColorDialog.addEventListener('close', () => {
+  if (subjectColorDialog.returnValue !== 'save' || !colorEditingSubjectId) return;
+  const subject = subjectsForClass(viewingClass()).find((x) => x.id === colorEditingSubjectId);
+  if (subject) subject.gradient = pendingSubjectColor;
+  saveSubjectsByClass();
   renderSubjects();
 });
 
@@ -818,18 +858,6 @@ document.querySelectorAll('[data-bg]').forEach((b) => {
   });
 });
 
-const storedMode = localStorage.getItem('schoolMode') || 'light';
-document.body.classList.toggle('dark', storedMode === 'dark');
-document.querySelectorAll('[data-mode]').forEach((b) => {
-  setSelected(b, b.dataset.mode === storedMode, ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']);
-  b.addEventListener('click', () => {
-    document.body.classList.toggle('dark', b.dataset.mode === 'dark');
-    localStorage.setItem('schoolMode', b.dataset.mode);
-    document.querySelectorAll('[data-mode]').forEach((x) => setSelected(x, x === b, ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']));
-    updateColourVisibility();
-  });
-});
-
 const colourSettingWrap = document.querySelector('#colourSettingWrap');
 const colourSetting = document.querySelector('#backgrounds').closest('[data-setting]');
 function updateColourVisibility() {
@@ -839,7 +867,26 @@ function updateColourVisibility() {
   colourSetting.classList.toggle('opacity-0', dark);
   colourSetting.classList.toggle('opacity-100', !dark);
 }
-updateColourVisibility();
+
+// "Auto" follows the clock: light during the day (6:00–20:00), dark at night. It's the default
+// and re-checks periodically so a long-open tab still switches over at dawn/dusk on its own.
+const isDaytime = () => { const h = new Date().getHours(); return h >= 6 && h < 20; };
+const effectiveDark = (mode) => mode === 'dark' || (mode === 'auto' && !isDaytime());
+function applyMode(mode) {
+  document.body.classList.toggle('dark', effectiveDark(mode));
+  updateColourVisibility();
+}
+const storedMode = localStorage.getItem('schoolMode') || 'auto';
+applyMode(storedMode);
+document.querySelectorAll('[data-mode]').forEach((b) => {
+  setSelected(b, b.dataset.mode === storedMode, ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']);
+  b.addEventListener('click', () => {
+    localStorage.setItem('schoolMode', b.dataset.mode);
+    applyMode(b.dataset.mode);
+    document.querySelectorAll('[data-mode]').forEach((x) => setSelected(x, x === b, ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']));
+  });
+});
+setInterval(() => applyMode(localStorage.getItem('schoolMode') || 'auto'), 5 * 60 * 1000);
 
 const storedPattern = localStorage.getItem('schoolPattern') || 'none';
 const patternClasses = ['pattern-smile', 'pattern-heart', 'pattern-star', 'pattern-panda'];
@@ -863,6 +910,7 @@ let accounts = [];
 let currentUser = JSON.parse(localStorage.getItem('schoolUser') || 'null');
 const normalise = (name) => name.trim().toLocaleLowerCase('pl-PL');
 const isAdmin = () => currentUser && (normalise(currentUser.name) === 'tpraglowski' || accounts.find((x) => normalise(x.name) === normalise(currentUser.name))?.admin);
+const isParent = () => currentUser?.role === 'parent';
 const screen = (id) => document.querySelectorAll('#startScreen,#loginForm,#registerForm').forEach((x) => x.classList.toggle('hidden', x.id !== id));
 
 // A student only ever sees their own class. A teacher can see/switch between every
@@ -923,7 +971,7 @@ function logout(message) {
 }
 
 function finishLogin(user) {
-  currentUser = { name: user.name, classroom: user.classroom, role: user.role || 'student', childClasses: user.childClasses || [] };
+  currentUser = { name: user.name, classroom: user.classroom, role: user.role || 'student', childClasses: user.childClasses || [], graduated: user.graduated || false, graduatedAt: user.graduatedAt || null };
   localStorage.setItem('schoolUser', JSON.stringify(currentUser));
   state.viewingClassroom = accessibleClasses(currentUser)[0];
   document.querySelector('#loginLayer').classList.add('hidden');
@@ -1087,9 +1135,84 @@ accountEditorDialog.addEventListener('close', () => {
   renderAccounts();
 });
 
+// ---------- Automatic school-year rollover ----------
+// Every Sept 1st, each student moves up a grade (3B -> 4B); 8th-graders have nowhere
+// further to go, so they're flagged "graduated" instead and shown a notice that their
+// account will be removed on Oct 1st, when the cleanup step actually deletes it.
+// Parents' children's classes move up the same way. This has no server/cron behind it —
+// whichever browser happens to load the app first after each date runs it — so a
+// Firestore transaction is used purely as a claim ticket (whoever wins the transaction
+// is the one that actually applies the change) to guarantee it only ever runs once even
+// if several people open the app at the same moment.
+const schoolYearStateRef = doc(db, 'store', 'schoolYearState');
+const schoolYearLabel = (date) => (date.getMonth() >= 8 ? date.getFullYear() : date.getFullYear() - 1);
+function promotedClassroom(cls) {
+  const grade = Number(gradeOfClass(cls));
+  const letter = cls.slice(-1);
+  return grade < 8 ? `${grade + 1}${letter}` : null;
+}
+async function claimSchoolYearStep(field, label) {
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(schoolYearStateRef);
+    if (!snap.exists()) {
+      // This feature's very first run ever, at some arbitrary point in the school year
+      // (not necessarily Sept 1st). Record the current label as the baseline WITHOUT
+      // acting on it — otherwise deploying this mid-year would immediately "promote"
+      // everyone for a transition that already happened before this code existed.
+      // Only a later, genuine Sept 1st (label advancing past this baseline) promotes.
+      tx.set(schoolYearStateRef, { promotedYear: label, cleanedYear: label });
+      return false;
+    }
+    const data = snap.data();
+    if (data[field] === label) return false;
+    tx.set(schoolYearStateRef, { ...data, [field]: label }, { merge: true });
+    return true;
+  });
+}
+async function runSchoolYearRollover() {
+  const now = new Date();
+  const label = schoolYearLabel(now);
+
+  if (await claimSchoolYearStep('promotedYear', label)) {
+    // Mutate each account object in place (not just write to Firestore) so the in-memory
+    // `accounts` array is already up to date for the Oct-1 cleanup check further down —
+    // otherwise a first visit that happens to land after Oct 1st (promotion and cleanup
+    // both firing in this same pass) would miss deleting students who just graduated.
+    await Promise.all(accounts.map((a) => {
+      if (a.role === 'student' && a.classroom) {
+        const next = promotedClassroom(a.classroom);
+        Object.assign(a, next ? { classroom: next } : { graduated: true, graduatedAt: now.toISOString() });
+        return setDoc(accountDocRef(a.name), a);
+      }
+      if (a.role === 'parent' && a.childClasses?.length) {
+        const nextClasses = a.childClasses.map((c) => promotedClassroom(c) || c);
+        Object.assign(a, { childClasses: nextClasses, classroom: nextClasses[0] });
+        return setDoc(accountDocRef(a.name), a);
+      }
+      return Promise.resolve();
+    }));
+    accounts.forEach((a) => {
+      if (a.role !== 'student' || a.graduated || !a.classroom) return;
+      if (!subjectsForClass(a.classroom).length) seedClassSubjectsFromStarter(a.classroom);
+    });
+  }
+
+  const octFirst = new Date(label, 9, 1);
+  if (now >= octFirst && (await claimSchoolYearStep('cleanedYear', label))) {
+    await Promise.all(accounts.filter((a) => a.graduated).map((a) => deleteDoc(accountDocRef(a.name))));
+  }
+}
+
 function setupUserInterface() {
   document.querySelector('#homeAdmin')?.remove();
   document.querySelector('#logoutButton')?.remove();
+  const graduatedNotice = document.querySelector('#graduatedNotice');
+  const showGraduated = currentUser?.role === 'student' && currentUser?.graduated;
+  graduatedNotice.classList.toggle('hidden', !showGraduated);
+  if (showGraduated) {
+    const deleteDate = new Date(new Date(currentUser.graduatedAt).getFullYear(), 9, 1);
+    graduatedNotice.innerHTML = `<b class="block">Ukończyłeś/aś 8 klasę 🎓</b>Twoje konto zostanie usunięte ${deleteDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`;
+  }
   if (isAdmin()) {
     document.querySelector('#homeGrid').insertAdjacentHTML('beforeend', `<button class="group relative min-h-[220px] overflow-hidden rounded-[25px] p-7 text-left text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" id="homeAdmin" style="background:linear-gradient(135deg,#0f172a,#475569)" onclick="show('admin')">
       <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
@@ -1111,6 +1234,7 @@ function setupUserInterface() {
   }
   document.querySelector('#addReplacement').textContent = isAdmin() ? '+ Dodaj zastępstwo' : '+ Zgłoś zastępstwo';
   document.querySelector('#addAnnouncement').classList.toggle('hidden', !isAdmin());
+  document.querySelector('#addSubject').classList.toggle('hidden', isParent());
   renderSubjects();
   renderSchedule();
   renderAnnouncements();
@@ -1133,7 +1257,7 @@ async function boot() {
   if (currentUser) {
     if (accountStillExists(currentUser)) {
       const latest = accounts.find((a) => normalise(a.name) === normalise(currentUser.name));
-      if (latest) currentUser = { name: latest.name, classroom: latest.classroom, role: latest.role || 'student', childClasses: latest.childClasses || [] };
+      if (latest) currentUser = { name: latest.name, classroom: latest.classroom, role: latest.role || 'student', childClasses: latest.childClasses || [], graduated: latest.graduated || false, graduatedAt: latest.graduatedAt || null };
       state.viewingClassroom = accessibleClasses(currentUser)[0];
       document.querySelector('#loginLayer').classList.add('hidden');
       setupUserInterface();
@@ -1147,5 +1271,7 @@ async function boot() {
   renderSchedule();
   show('home');
   setInterval(renderSchedule, 60000);
+
+  runSchoolYearRollover().catch((err) => console.error('Nie udało się przeprowadzić rocznej promocji klas', err));
 }
 boot();
