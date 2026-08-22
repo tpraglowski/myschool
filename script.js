@@ -46,12 +46,21 @@ const initialLessonsByClass = normalizeLessonsByClass(storedLessonsByClass || { 
 const storedAnnouncements = JSON.parse(localStorage.getItem('schoolAnnouncements') || 'null');
 const normalizeAnnouncements = (list) => (list || []).map((a) => ({ classroom: a.lessonId ? '1A' : 'all', pending: false, date: '', time: '', ...a }));
 
+// Subjects/competences are per class too; the old global list migrates into 1A.
+const legacySubjects = JSON.parse(localStorage.getItem('schoolSubjects') || 'null');
+const storedSubjectsByClass = JSON.parse(localStorage.getItem('schoolSubjectsByClass') || 'null');
+const initialSubjectsByClass = storedSubjectsByClass || { '1A': legacySubjects || defaultSubjects };
+const starterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null') || JSON.parse(JSON.stringify(defaultSubjects));
+
 const state = {
-  subjects: JSON.parse(localStorage.getItem('schoolSubjects') || 'null') || defaultSubjects,
+  subjectsByClass: initialSubjectsByClass,
+  starterSubjects,
   lessonsByClass: initialLessonsByClass,
   announcements: normalizeAnnouncements(storedAnnouncements || defaultAnnouncements),
   activeSubject: null,
+  activeTemplateSubject: null,
   mode: 'subject',
+  subjectTarget: 'class',
   editAnnouncement: null,
   editLesson: null,
   lessonTargetClass: null,
@@ -63,10 +72,22 @@ const state = {
   lessonColor: lessonColors[0],
 };
 
-const saveSubjects = () => localStorage.setItem('schoolSubjects', JSON.stringify(state.subjects));
+const saveSubjectsByClass = () => localStorage.setItem('schoolSubjectsByClass', JSON.stringify(state.subjectsByClass));
+const saveStarterSubjects = () => localStorage.setItem('schoolStarterSubjects', JSON.stringify(state.starterSubjects));
 const saveLessonsByClass = () => localStorage.setItem('schoolLessonsByClass', JSON.stringify(state.lessonsByClass));
 const saveAnnouncements = () => localStorage.setItem('schoolAnnouncements', JSON.stringify(state.announcements));
 const classLessons = (cls) => state.lessonsByClass[cls] || (state.lessonsByClass[cls] = []);
+const subjectsForClass = (cls) => state.subjectsByClass[cls] || (state.subjectsByClass[cls] = []);
+
+function seedClassSubjectsFromStarter(cls) {
+  state.subjectsByClass[cls] = state.starterSubjects.map((s) => ({
+    id: crypto.randomUUID(),
+    name: s.name,
+    gradient: s.gradient,
+    competences: s.competences.map((c) => ({ id: crypto.randomUUID(), name: c.name })),
+  }));
+  saveSubjectsByClass();
+}
 
 const escapeHtml = (s) => s.replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
 const capitalize = (s) => (s ? `${s.charAt(0).toLocaleUpperCase('pl-PL')}${s.slice(1)}` : s);
@@ -78,12 +99,23 @@ function setSelected(el, isSelected, onClasses, offClasses) {
 }
 
 // ---------- Navigation ----------
+const navParent = { schedule: 'home', changes: 'home', events: 'home', admin: 'home', detail: 'competences' };
 function show(id) {
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== id));
+  const navId = navParent[id] || id;
+  let activeBtn = null;
   document.querySelectorAll('#mainNav [data-view]').forEach((b) => {
-    const active = b.dataset.view === id;
-    setSelected(b, active, ['bg-primary', 'text-white'], ['text-muted']);
+    const active = b.dataset.view === navId;
+    if (active) activeBtn = b;
+    setSelected(b, active, ['text-white'], ['text-muted']);
   });
+  const pill = document.querySelector('#navPill');
+  if (activeBtn && pill) {
+    pill.style.left = activeBtn.offsetLeft + 'px';
+    pill.style.top = activeBtn.offsetTop + 'px';
+    pill.style.width = activeBtn.offsetWidth + 'px';
+    pill.style.height = activeBtn.offsetHeight + 'px';
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 window.show = show;
@@ -102,8 +134,9 @@ const statusInfo = {
 function card(item, type) {
   const status = statusInfo[item.status || 'locked'];
   const background = type === 'competence' ? status.color : item.gradient;
+  const earned = type === 'subject' ? item.competences.filter((c) => c.status === 'earned').length : 0;
   const body = type === 'subject'
-    ? `Kompetencje: ${item.competences.length}`
+    ? `Zdobyte: ${earned}/${item.competences.length}`
     : `<span class="mt-2 inline-block rounded-lg bg-white/25 px-2 py-1 text-[.78em] font-extrabold text-white">${status.label}</span>`;
   return `<article class="group relative min-h-[172px] cursor-pointer overflow-hidden rounded-[25px] p-5 text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" style="background:${background}" data-id="${item.id}" data-type="${type}" tabindex="0" role="button">
     <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
@@ -114,15 +147,16 @@ function card(item, type) {
 }
 
 function renderSubjects() {
+  const subjects = subjectsForClass(currentUser?.classroom);
   const el = document.querySelector('#subjectGrid');
-  el.innerHTML = state.subjects.length
-    ? state.subjects.map((x) => card(x, 'subject')).join('')
+  el.innerHTML = subjects.length
+    ? subjects.map((x) => card(x, 'subject')).join('')
     : emptyState('Nie masz jeszcze przedmiotów', 'Dodaj pierwszy przedmiot, aby zacząć.');
   bindCards(el);
 }
 
 function renderCompetences() {
-  const subject = state.subjects.find((x) => x.id === state.activeSubject);
+  const subject = subjectsForClass(currentUser?.classroom).find((x) => x.id === state.activeSubject);
   if (!subject) return show('competences');
   document.querySelector('#detailTitle').textContent = subject.name;
   document.querySelector('#crumbName').textContent = subject.name;
@@ -145,13 +179,14 @@ function bindCards(el) {
       e.stopPropagation();
       const id = b.dataset.delete, type = b.dataset.type;
       if (!confirm('Czy na pewno chcesz usunąć tę pozycję?')) return;
+      const subjects = subjectsForClass(currentUser?.classroom);
       if (type === 'subject') {
-        state.subjects = state.subjects.filter((x) => x.id !== id);
+        state.subjectsByClass[currentUser.classroom] = subjects.filter((x) => x.id !== id);
       } else {
-        const subject = state.subjects.find((x) => x.id === state.activeSubject);
+        const subject = subjects.find((x) => x.id === state.activeSubject);
         subject.competences = subject.competences.filter((x) => x.id !== id);
       }
-      saveSubjects();
+      saveSubjectsByClass();
       type === 'subject' ? renderSubjects() : renderCompetences();
     });
   });
@@ -174,7 +209,7 @@ function bindCards(el) {
 const statusDialog = document.querySelector('#statusEditor');
 let activeCompetence = null;
 function openStatusEditor(id) {
-  activeCompetence = state.subjects.find((x) => x.id === state.activeSubject).competences.find((x) => x.id === id);
+  activeCompetence = subjectsForClass(currentUser?.classroom).find((x) => x.id === state.activeSubject).competences.find((x) => x.id === id);
   document.querySelector('#statusTitle').textContent = activeCompetence.name;
   document.querySelector('#statusSelect').value = activeCompetence.status || 'locked';
   statusDialog.showModal();
@@ -183,7 +218,7 @@ document.querySelector('#cancelStatus').addEventListener('click', () => statusDi
 statusDialog.addEventListener('close', () => {
   if (statusDialog.returnValue !== 'save' || !activeCompetence) return;
   activeCompetence.status = document.querySelector('#statusSelect').value;
-  saveSubjects();
+  saveSubjectsByClass();
   renderCompetences();
 });
 
@@ -212,15 +247,17 @@ document.querySelector('#announcementClassroom').addEventListener('change', (e) 
   if (!document.querySelector('#announcementLessonField').classList.contains('hidden')) refreshReplacementLessonOptions(e.target.value);
 });
 
-function openEditor(mode, announcementId = null) {
+function openEditor(mode, announcementId = null, target = 'class') {
   state.mode = mode;
+  state.subjectTarget = target;
   state.editAnnouncement = announcementId;
   const isAnnouncement = mode === 'announcement';
   const existing = isAnnouncement && announcementId ? state.announcements.find((x) => x.id === announcementId) : null;
   const isReplacement = state.forceReplacement || !!existing?.lessonId;
   const admin = isAdmin();
   state.isReplacementEditing = isReplacement;
-  state.chosenGradient = gradients[state.subjects.length % gradients.length];
+  const subjectsInScope = target === 'template' ? state.starterSubjects : subjectsForClass(currentUser?.classroom);
+  state.chosenGradient = gradients[subjectsInScope.length % gradients.length];
 
   document.querySelector('#modalTitle').textContent = isAnnouncement ? (existing ? 'Edytuj wpis' : isReplacement ? (admin ? 'Dodaj zastępstwo' : 'Zgłoś zastępstwo') : 'Dodaj wpis') : mode === 'subject' ? 'Dodaj przedmiot' : 'Dodaj kompetencję';
   document.querySelector('#nameLabel').textContent = isAnnouncement ? (isReplacement ? 'Nazwa zastępstwa' : 'Tytuł ogłoszenia') : mode === 'subject' ? 'Nazwa przedmiotu' : 'Nazwa kompetencji';
@@ -229,7 +266,7 @@ function openEditor(mode, announcementId = null) {
   document.querySelector('#itemDescription').value = existing ? existing.text : '';
   document.querySelector('#descriptionField').classList.toggle('hidden', !isAnnouncement);
   document.querySelector('#itemDescription').required = isAnnouncement;
-  document.querySelector('#gradientField').classList.toggle('hidden', isAnnouncement);
+  document.querySelector('#gradientField').classList.toggle('hidden', isAnnouncement || mode === 'competence');
 
   const showDateTime = isAnnouncement && !isReplacement;
   document.querySelector('#itemDateTimeField').classList.toggle('hidden', !showDateTime);
@@ -303,15 +340,24 @@ dialog.addEventListener('close', () => {
     return;
   }
 
-  const item = { id: crypto.randomUUID(), name, gradient: state.chosenGradient };
+  const item = { id: crypto.randomUUID(), name };
+  const isTemplate = state.subjectTarget === 'template';
+  const subjects = isTemplate ? state.starterSubjects : subjectsForClass(currentUser.classroom);
   if (state.mode === 'subject') {
+    item.gradient = state.chosenGradient;
     item.competences = [];
-    state.subjects.push(item);
+    subjects.push(item);
   } else {
-    state.subjects.find((x) => x.id === state.activeSubject).competences.push(item);
+    const activeId = isTemplate ? state.activeTemplateSubject : state.activeSubject;
+    subjects.find((x) => x.id === activeId).competences.push(item);
   }
-  saveSubjects();
-  state.mode === 'subject' ? renderSubjects() : renderCompetences();
+  if (isTemplate) {
+    saveStarterSubjects();
+    renderStarterSubjects();
+  } else {
+    saveSubjectsByClass();
+    state.mode === 'subject' ? renderSubjects() : renderCompetences();
+  }
 });
 
 // ---------- Lesson schedule ----------
@@ -541,6 +587,53 @@ function renderPendingReplacements() {
   }));
 }
 
+// ---------- Admin: starter competences package ----------
+function renderStarterSubjects() {
+  const el = document.querySelector('#starterSubjectList');
+  if (!el) return;
+  el.innerHTML = state.starterSubjects.length ? state.starterSubjects.map((s) => `
+    <div class="rounded-2xl border border-line p-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="h-6 w-6 shrink-0 rounded-lg" style="background:${s.gradient}"></span>
+          <b>${escapeHtml(s.name)}</b>
+        </div>
+        <div class="flex shrink-0 gap-1.5">
+          <button class="rounded-lg bg-app px-2 py-1 font-bold text-primary" data-add-starter-competence="${s.id}">+ Kompetencja</button>
+          <button class="rounded-lg bg-app px-2 py-1 font-bold text-red-600" data-delete-starter-subject="${s.id}">Usuń przedmiot</button>
+        </div>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        ${s.competences.length ? s.competences.map((c) => `
+          <span class="inline-flex items-center gap-1.5 rounded-lg bg-app px-2.5 py-1 text-sm text-ink">
+            ${escapeHtml(c.name)}
+            <button class="font-bold text-red-600" data-delete-starter-competence="${s.id}|${c.id}" aria-label="Usuń kompetencję">×</button>
+          </span>`).join('') : '<span class="text-sm text-muted">Brak kompetencji</span>'}
+      </div>
+    </div>`
+  ).join('') : emptyState('Brak przedmiotów', 'Dodaj pierwszy przedmiot do pakietu startowego.');
+
+  el.querySelectorAll('[data-add-starter-competence]').forEach((b) => b.addEventListener('click', () => {
+    state.activeTemplateSubject = b.dataset.addStarterCompetence;
+    openEditor('competence', null, 'template');
+  }));
+  el.querySelectorAll('[data-delete-starter-subject]').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Usunąć ten przedmiot z pakietu startowego?')) return;
+    state.starterSubjects = state.starterSubjects.filter((s) => s.id !== b.dataset.deleteStarterSubject);
+    saveStarterSubjects();
+    renderStarterSubjects();
+  }));
+  el.querySelectorAll('[data-delete-starter-competence]').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Usunąć tę kompetencję z pakietu startowego?')) return;
+    const [subjectId, competenceId] = b.dataset.deleteStarterCompetence.split('|');
+    const subject = state.starterSubjects.find((s) => s.id === subjectId);
+    subject.competences = subject.competences.filter((c) => c.id !== competenceId);
+    saveStarterSubjects();
+    renderStarterSubjects();
+  }));
+}
+document.querySelector('#addStarterSubject')?.addEventListener('click', () => openEditor('subject', null, 'template'));
+
 // ---------- Settings ----------
 const fontSize = document.querySelector('#fontSize');
 const storedFont = localStorage.getItem('schoolFontSize');
@@ -618,6 +711,7 @@ document.querySelector('#registerForm').addEventListener('submit', (e) => {
   const user = { name, classroom: classSelect.value, password: document.querySelector('#registerPassword').value, admin: normalise(name) === 'tpraglowski' };
   accounts.push(user);
   localStorage.setItem('schoolAccounts', JSON.stringify(accounts));
+  if (!subjectsForClass(user.classroom).length) seedClassSubjectsFromStarter(user.classroom);
   finishLogin(user);
 });
 
@@ -670,8 +764,10 @@ function setupUserInterface() {
     document.querySelector('#addAdminLesson').addEventListener('click', () => openLessonEditor(null, adminClassSelect.value, state.adminScheduleDay));
     renderAdminLessonTable();
     renderPendingReplacements();
+    renderStarterSubjects();
   }
   document.querySelector('#addReplacement').textContent = isAdmin() ? '+ Dodaj zastępstwo' : '+ Zgłoś zastępstwo';
+  renderSubjects();
   renderSchedule();
   renderAnnouncements();
   document.querySelector('#settingsPanel').insertAdjacentHTML('beforeend', `<button class="mt-[18px] rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" id="logoutButton">Wyloguj się</button>`);
@@ -692,4 +788,5 @@ if (currentUser) {
 renderSubjects();
 renderAnnouncements();
 renderSchedule();
+show('home');
 setInterval(renderSchedule, 60000);

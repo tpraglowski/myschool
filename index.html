@@ -33,10 +33,11 @@
         <span class="grid h-[42px] w-[42px] place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-500 text-white shadow-[0_8px_18px_#4f46e540]">✦</span>
         MY SCHOOL
       </div>
-      <nav class="flex gap-1 rounded-2xl border border-line bg-card p-1 shadow-[0_4px_15px_var(--shadow)]" id="mainNav" aria-label="Menu">
-        <button class="rounded-[10px] bg-primary px-3 py-2 font-bold text-white" data-view="home">Główne</button>
-        <button class="rounded-[10px] px-3 py-2 font-bold text-muted" data-view="competences">Kompetencje</button>
-        <button class="rounded-[10px] px-3 py-2 font-bold text-muted" data-view="settings">Ustawienia</button>
+      <nav class="relative flex gap-1 rounded-2xl border border-line bg-card p-1 shadow-[0_4px_15px_var(--shadow)]" id="mainNav" aria-label="Menu">
+        <span class="absolute rounded-[10px] bg-primary transition-all duration-300 ease-out" id="navPill"></span>
+        <button class="relative z-10 rounded-[10px] px-3 py-2 font-bold text-white" data-view="home">Główne</button>
+        <button class="relative z-10 rounded-[10px] px-3 py-2 font-bold text-muted" data-view="competences">Kompetencje</button>
+        <button class="relative z-10 rounded-[10px] px-3 py-2 font-bold text-muted" data-view="settings">Ustawienia</button>
       </nav>
     </header>
 
@@ -188,6 +189,13 @@
           <span class="text-muted">Oczekują na zatwierdzenie</span>
         </div>
         <div class="grid gap-2.5" id="pendingReplacements"></div>
+      </div>
+      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
+        <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3">
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Pakiet startowych kompetencji</h2><p class="text-sm text-muted">Trafia automatycznie do klasy przy jej pierwszym koncie.</p></div>
+          <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addStarterSubject">+ Dodaj przedmiot</button>
+        </div>
+        <div class="grid gap-3" id="starterSubjectList"></div>
       </div>
     </section>
   </main>
