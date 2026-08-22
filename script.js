@@ -2,18 +2,24 @@
 import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
 import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+import { getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection, onSnapshot } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
 // ---------- Cloud data store (Firestore) ----------
-// Shared data (accounts, lessons, subjects, announcements) lives in Firestore so every
-// browser/device sees the same thing. Each key below is one document in the "store"
-// collection, shaped as { value: <data> }. state.* / accounts stay the in-memory mirror
-// that the rest of the app already reads and mutates; save*() writes the mirror back to
-// Firestore, and onSnapshot() pushes updates made elsewhere back into this tab live.
+// Shared data lives in Firestore so every browser/device sees the same thing.
+// Lessons/subjects/announcements are each one document in the "store" collection
+// (shaped as { value: <data> }) — state.* mirrors them in memory, save*() writes the
+// mirror back, and onSnapshot() pushes updates made elsewhere back into this tab live.
+// Accounts are the exception: each account is its OWN document in the "accounts"
+// collection (id = normalized username), so adding/removing/editing one account only
+// ever touches that single document. A shared array-in-one-doc (like the others use)
+// would mean two sessions saving around the same time could silently overwrite each
+// other's changes and lose accounts — that's not a risk worth taking for login data.
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 const storeDoc = (name) => doc(db, 'store', name);
+const accountsCollection = collection(db, 'accounts');
+const accountDocRef = (name) => doc(db, 'accounts', normalise(name));
 
 const gradients = ['linear-gradient(135deg,#4f46e5,#8b5cf6)', 'linear-gradient(135deg,#0891b2,#22c55e)', 'linear-gradient(135deg,#ea580c,#f43f5e)', 'linear-gradient(135deg,#0f766e,#0ea5e9)', 'linear-gradient(135deg,#be123c,#a855f7)', 'linear-gradient(135deg,#ca8a04,#f97316)'];
 const lessonColors = ['#4f46e5', '#0891b2', '#7c3aed', '#dc2626', '#16a34a', '#ea580c'];
@@ -82,8 +88,9 @@ const normalizeSubjectsByClass = (byClass) => {
 const legacyStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
 const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
 const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
+const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, ...a }));
 
-const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'accounts'];
+const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements'];
 const seedValue = {
   subjectsByClass: normalizeSubjectsByClass(legacySubjectsByClass || { '1A': legacySubjects || defaultSubjects }),
   starterSubjectsByGrade: legacyStarterByGrade || Object.fromEntries(
@@ -91,7 +98,6 @@ const seedValue = {
   ),
   lessonsByClass: normalizeLessonsByClass(legacyLessonsByClass || { '1A': legacyLessons || defaultLessons }),
   announcements: normalizeAnnouncements(legacyAnnouncements || defaultAnnouncements),
-  accounts: legacyAccounts || [],
 };
 
 const state = {
@@ -107,6 +113,7 @@ const state = {
   editAnnouncement: null,
   editLesson: null,
   lessonTargetClass: null,
+  viewingClassroom: null,
   scheduleDay: currentWeekday(),
   adminScheduleDay: currentWeekday(),
   forceReplacement: false,
@@ -119,7 +126,6 @@ const saveSubjectsByClass = () => setDoc(storeDoc('subjectsByClass'), { value: s
 const saveStarterSubjectsByGrade = () => setDoc(storeDoc('starterSubjectsByGrade'), { value: state.starterSubjectsByGrade });
 const saveLessonsByClass = () => setDoc(storeDoc('lessonsByClass'), { value: state.lessonsByClass });
 const saveAnnouncements = () => setDoc(storeDoc('announcements'), { value: state.announcements });
-const saveAccounts = () => setDoc(storeDoc('accounts'), { value: accounts });
 const classLessons = (cls) => state.lessonsByClass[cls] || (state.lessonsByClass[cls] = []);
 
 function applyStoreValue(key, value) {
@@ -127,7 +133,6 @@ function applyStoreValue(key, value) {
   else if (key === 'starterSubjectsByGrade') state.starterSubjectsByGrade = value || {};
   else if (key === 'lessonsByClass') state.lessonsByClass = normalizeLessonsByClass(value);
   else if (key === 'announcements') state.announcements = normalizeAnnouncements(value);
-  else if (key === 'accounts') accounts = value || [];
 }
 
 function renderAfterStoreChange(key) {
@@ -143,26 +148,47 @@ function renderAfterStoreChange(key) {
     renderAnnouncements();
     renderPendingReplacements();
     renderSchedule();
-  } else if (key === 'accounts') {
-    renderAccounts();
   }
+}
+
+async function loadAccounts() {
+  const snap = await getDocs(accountsCollection);
+  if (!snap.empty) {
+    accounts = normalizeAccounts(snap.docs.map((d) => d.data()));
+    return;
+  }
+  // One-time migration from the old single-array "store/accounts" doc (or pre-Firestore
+  // localStorage data) into one document per account, the very first time this runs.
+  const legacyDoc = await getDoc(storeDoc('accounts'));
+  const migrated = normalizeAccounts(legacyDoc.exists() ? legacyDoc.data().value : legacyAccounts);
+  await Promise.all(migrated.map((a) => setDoc(accountDocRef(a.name), a)));
+  accounts = migrated;
 }
 
 async function loadStore() {
   await signInAnonymously(auth);
-  await Promise.all(STORE_KEYS.map(async (key) => {
-    const ref = storeDoc(key);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      applyStoreValue(key, snap.data().value);
-    } else {
-      applyStoreValue(key, seedValue[key]);
-      await setDoc(ref, { value: seedValue[key] });
-    }
-  }));
+  await Promise.all([
+    loadAccounts(),
+    ...STORE_KEYS.map(async (key) => {
+      const ref = storeDoc(key);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        applyStoreValue(key, snap.data().value);
+      } else {
+        applyStoreValue(key, seedValue[key]);
+        await setDoc(ref, { value: seedValue[key] });
+      }
+    }),
+  ]);
 }
 
 function watchStoreLive() {
+  onSnapshot(accountsCollection, (snap) => {
+    accounts = normalizeAccounts(snap.docs.map((d) => d.data()));
+    renderAccounts();
+    renderPendingTeachers();
+    if (currentUser && !accountStillExists(currentUser)) logout('Twoje konto zostało usunięte przez administratora.');
+  });
   STORE_KEYS.forEach((key) => onSnapshot(storeDoc(key), (snap) => {
     if (!snap.exists()) return;
     applyStoreValue(key, snap.data().value);
@@ -242,7 +268,7 @@ function card(item, type) {
 }
 
 function renderSubjects() {
-  const subjects = subjectsForClass(currentUser?.classroom);
+  const subjects = subjectsForClass(viewingClass());
   const el = document.querySelector('#subjectGrid');
   el.innerHTML = subjects.length
     ? subjects.map((x) => card(x, 'subject')).join('')
@@ -251,7 +277,7 @@ function renderSubjects() {
 }
 
 function renderCompetences() {
-  const subject = subjectsForClass(currentUser?.classroom).find((x) => x.id === state.activeSubject);
+  const subject = subjectsForClass(viewingClass()).find((x) => x.id === state.activeSubject);
   if (!subject) return show('competences');
   document.querySelector('#detailTitle').textContent = subject.name;
   document.querySelector('#crumbName').textContent = subject.name;
@@ -276,9 +302,9 @@ function bindCards(el) {
       e.stopPropagation();
       const id = b.dataset.delete, type = b.dataset.type;
       if (!confirm('Czy na pewno chcesz usunąć tę pozycję?')) return;
-      const subjects = subjectsForClass(currentUser?.classroom);
+      const subjects = subjectsForClass(viewingClass());
       if (type === 'subject') {
-        state.subjectsByClass[currentUser.classroom] = subjects.filter((x) => x.id !== id);
+        state.subjectsByClass[viewingClass()] = subjects.filter((x) => x.id !== id);
       } else {
         const subject = subjects.find((x) => x.id === state.activeSubject);
         subject.competences = subject.competences.filter((x) => x.id !== id);
@@ -306,7 +332,7 @@ function bindCards(el) {
 const statusDialog = document.querySelector('#statusEditor');
 let activeCompetence = null;
 function openStatusEditor(id) {
-  activeCompetence = subjectsForClass(currentUser?.classroom).find((x) => x.id === state.activeSubject).competences.find((x) => x.id === id);
+  activeCompetence = subjectsForClass(viewingClass()).find((x) => x.id === state.activeSubject).competences.find((x) => x.id === id);
   document.querySelector('#statusTitle').textContent = activeCompetence.name;
   document.querySelector('#statusSelect').value = activeCompetence.status || 'locked';
   statusDialog.showModal();
@@ -354,7 +380,7 @@ function openEditor(mode, announcementId = null, target = 'class') {
   const isReplacement = state.forceReplacement || !!existing?.lessonId;
   const admin = isAdmin();
   state.isReplacementEditing = isReplacement;
-  const subjectsInScope = target === 'template' ? starterSubjectsForGrade(state.adminStarterGrade) : subjectsForClass(currentUser?.classroom);
+  const subjectsInScope = target === 'template' ? starterSubjectsForGrade(state.adminStarterGrade) : subjectsForClass(viewingClass());
   state.chosenGradient = gradients[subjectsInScope.length % gradients.length];
 
   document.querySelector('#modalTitle').textContent = isAnnouncement ? (existing ? 'Edytuj wpis' : isReplacement ? (admin ? 'Dodaj zastępstwo' : 'Zgłoś zastępstwo') : 'Dodaj wpis') : mode === 'subject' ? 'Dodaj przedmiot' : 'Dodaj kompetencję';
@@ -377,7 +403,7 @@ function openEditor(mode, announcementId = null, target = 'class') {
   classroomField.classList.toggle('hidden', !showClassroomPicker);
   if (showClassroomPicker) {
     classroomSelect.innerHTML = classroomOptionsHtml(!isReplacement);
-    classroomSelect.value = existing?.classroom || (isReplacement ? currentUser?.classroom || classCodes[0] : 'all');
+    classroomSelect.value = existing?.classroom || (isReplacement ? viewingClass() || classCodes[0] : 'all');
   }
 
   const lessonField = document.querySelector('#announcementLessonField');
@@ -386,7 +412,7 @@ function openEditor(mode, announcementId = null, target = 'class') {
   lessonField.classList.toggle('hidden', !isAnnouncement || !isReplacement);
   typeField.classList.toggle('hidden', !isAnnouncement || isReplacement);
   if (isReplacement) {
-    const targetClass = admin ? classroomSelect.value : currentUser?.classroom || classCodes[0];
+    const targetClass = admin ? classroomSelect.value : viewingClass() || classCodes[0];
     refreshReplacementLessonOptions(targetClass);
     lessonSelect.value = existing?.lessonId || '';
   }
@@ -417,7 +443,7 @@ dialog.addEventListener('close', () => {
     const lessonId = isReplacement ? document.querySelector('#announcementLesson').value || '' : '';
     if (isReplacement && !lessonId) return;
     const classroom = isReplacement
-      ? admin ? document.querySelector('#announcementClassroom').value : currentUser?.classroom || classCodes[0]
+      ? admin ? document.querySelector('#announcementClassroom').value : viewingClass() || classCodes[0]
       : document.querySelector('#announcementClassroom').value;
     const type = isReplacement ? 'replacement' : document.querySelector('#announcementType').value;
     const date = isReplacement ? '' : document.querySelector('#itemDate').value;
@@ -440,7 +466,7 @@ dialog.addEventListener('close', () => {
 
   const item = { id: crypto.randomUUID(), name };
   const isTemplate = state.subjectTarget === 'template';
-  const subjects = isTemplate ? starterSubjectsForGrade(state.adminStarterGrade) : subjectsForClass(currentUser.classroom);
+  const subjects = isTemplate ? starterSubjectsForGrade(state.adminStarterGrade) : subjectsForClass(viewingClass());
   if (!isTemplate) item.addedBy = isAdmin() ? 'admin' : 'student';
   if (state.mode === 'subject') {
     item.gradient = state.chosenGradient;
@@ -472,7 +498,7 @@ function renderLessonColors() {
   }));
 }
 
-function openLessonEditor(id = null, cls = currentUser?.classroom, day = state.scheduleDay) {
+function openLessonEditor(id = null, cls = viewingClass(), day = state.scheduleDay) {
   state.editLesson = id;
   state.lessonTargetClass = cls;
   const item = id ? classLessons(cls).find((x) => x.id === id) : null;
@@ -508,7 +534,7 @@ lessonDialog.addEventListener('close', () => {
     lessons.push({ id: crypto.randomUUID(), name, day, teacher, room, start, end, color: state.lessonColor, addedBy: isAdmin() ? 'admin' : 'student' });
   }
   saveLessonsByClass();
-  if (state.lessonTargetClass === currentUser?.classroom) renderSchedule();
+  if (state.lessonTargetClass === viewingClass()) renderSchedule();
   if (document.querySelector('#adminClassSelect')?.value === state.lessonTargetClass) renderAdminLessonTable();
 });
 
@@ -522,15 +548,33 @@ function renderDayTabs(container, activeDay, onSelect) {
   renderTabs(container, weekdays, activeDay, onSelect);
 }
 
+function renderViewingClassSwitcher() {
+  const field = document.querySelector('#viewingClassField');
+  const select = document.querySelector('#viewingClassSelect');
+  const classes = accessibleClasses(currentUser);
+  const show = classes.length > 1;
+  field.classList.toggle('hidden', !show);
+  if (!show) return;
+  select.innerHTML = classes.map((c) => `<option value="${c}">${c}</option>`).join('');
+  select.value = viewingClass();
+}
+document.querySelector('#viewingClassSelect').addEventListener('change', (e) => {
+  state.viewingClassroom = e.target.value;
+  renderSchedule();
+  renderAnnouncements();
+  renderSubjects();
+});
+
 function renderSchedule() {
   const now = new Date();
   const current = now.getHours() * 60 + now.getMinutes();
   const el = document.querySelector('#lessonList');
   const isToday = state.scheduleDay === currentWeekday();
+  renderViewingClassSwitcher();
   document.querySelector('#scheduleDayTitle').textContent = `Plan lekcji · ${weekdayLabel(state.scheduleDay)}`;
   document.querySelector('#todayDate').textContent = isToday ? now.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' }) : '';
   renderDayTabs(document.querySelector('#scheduleDayTabs'), state.scheduleDay, (day) => { state.scheduleDay = day; renderSchedule(); });
-  const lessons = classLessons(currentUser?.classroom).filter((x) => x.day === state.scheduleDay).sort((a, b) => a.start.localeCompare(b.start));
+  const lessons = classLessons(viewingClass()).filter((x) => x.day === state.scheduleDay).sort((a, b) => a.start.localeCompare(b.start));
   el.innerHTML = lessons.length ? lessons.map((x) => {
     const replacement = state.announcements.find((a) => a.lessonId === x.id && !a.pending);
     const replacementName = replacement?.title.replace(/^Zastępstwo:\s*/i, '');
@@ -546,7 +590,7 @@ function renderSchedule() {
   el.querySelectorAll('[data-edit-lesson]').forEach((b) => b.addEventListener('click', () => openLessonEditor(b.dataset.editLesson)));
   el.querySelectorAll('[data-delete-own-lesson]').forEach((b) => b.addEventListener('click', () => {
     if (!confirm('Usunąć tę lekcję ze swojego planu?')) return;
-    const lessons = classLessons(currentUser.classroom);
+    const lessons = classLessons(viewingClass());
     const idx = lessons.findIndex((x) => x.id === b.dataset.deleteOwnLesson);
     if (idx !== -1) lessons.splice(idx, 1);
     saveLessonsByClass();
@@ -591,7 +635,7 @@ function renderAdminLessonTable() {
     state.lessonsByClass[cls] = classLessons(cls).filter((x) => x.id !== b.dataset.adminDeleteLesson);
     saveLessonsByClass();
     renderAdminLessonTable();
-    if (cls === currentUser?.classroom) renderSchedule();
+    if (cls === viewingClass()) renderSchedule();
   }));
 }
 
@@ -600,7 +644,7 @@ const eventStyles = { event: 'bg-blue-100 text-blue-900', reminder: 'bg-green-10
 
 function renderAnnouncements() {
   const admin = isAdmin();
-  const cls = currentUser?.classroom;
+  const cls = viewingClass();
   const events = state.announcements.filter((x) => !x.lessonId && (admin || x.classroom === 'all' || x.classroom === cls));
   const replacements = state.announcements.filter((x) => x.lessonId && !x.pending && (admin || x.classroom === cls));
   const eventEl = document.querySelector('#announcementList');
@@ -776,8 +820,15 @@ document.querySelectorAll('[data-mode]').forEach((b) => {
   });
 });
 
+const colourSettingWrap = document.querySelector('#colourSettingWrap');
 const colourSetting = document.querySelector('#backgrounds').closest('[data-setting]');
-const updateColourVisibility = () => colourSetting.classList.toggle('hidden', document.body.classList.contains('dark'));
+function updateColourVisibility() {
+  const dark = document.body.classList.contains('dark');
+  colourSettingWrap.classList.toggle('grid-rows-[0fr]', dark);
+  colourSettingWrap.classList.toggle('grid-rows-[1fr]', !dark);
+  colourSetting.classList.toggle('opacity-0', dark);
+  colourSetting.classList.toggle('opacity-100', !dark);
+}
 updateColourVisibility();
 
 const storedPattern = localStorage.getItem('schoolPattern') || 'none';
@@ -796,19 +847,75 @@ document.querySelectorAll('[data-pattern]').forEach((b) => {
 // ---------- Accounts / login ----------
 const classSelect = document.querySelector('#classroom');
 classSelect.innerHTML += classOptionsHtml;
+const childClassesSelect = document.querySelector('#childClasses');
+childClassesSelect.innerHTML = classOptionsHtml;
 let accounts = [];
 let currentUser = JSON.parse(localStorage.getItem('schoolUser') || 'null');
 const normalise = (name) => name.trim().toLocaleLowerCase('pl-PL');
 const isAdmin = () => currentUser && (normalise(currentUser.name) === 'tpraglowski' || accounts.find((x) => normalise(x.name) === normalise(currentUser.name))?.admin);
 const screen = (id) => document.querySelectorAll('#startScreen,#loginForm,#registerForm').forEach((x) => x.classList.toggle('hidden', x.id !== id));
 
+// A student only ever sees their own class. A teacher can see/switch between every
+// class. A parent can see/switch between their children's classes (1-5 of them).
+// state.viewingClassroom holds whichever of these is currently displayed.
+function accessibleClasses(user) {
+  if (!user) return [];
+  if (user.role === 'teacher') return classCodes;
+  if (user.role === 'parent') return user.childClasses?.length ? user.childClasses : [user.classroom || classCodes[0]];
+  return [user.classroom];
+}
+const viewingClass = () => state.viewingClassroom || currentUser?.classroom;
+const accountStillExists = (user) => !!user && (normalise(user.name) === 'tpraglowski' || accounts.some((a) => normalise(a.name) === normalise(user.name)));
+function roleLabel(a) {
+  if (a.admin) return 'Administrator';
+  if (a.role === 'teacher') return 'Nauczyciel';
+  if (a.role === 'parent') return `Rodzic (klasy: ${(a.childClasses || []).join(', ') || '—'})`;
+  return 'Uczeń';
+}
+
 document.querySelector('#openLogin').addEventListener('click', () => screen('loginForm'));
-document.querySelector('#openRegister').addEventListener('click', () => screen('registerForm'));
+document.querySelector('#openRegister').addEventListener('click', () => {
+  document.querySelector('#registerRole').value = 'student';
+  updateRegisterRoleFields();
+  screen('registerForm');
+});
 document.querySelectorAll('[data-start]').forEach((b) => b.addEventListener('click', () => screen('startScreen')));
 
+const registerRole = document.querySelector('#registerRole');
+const classroomField = document.querySelector('#classroomField');
+const childClassesField = document.querySelector('#childClassesField');
+function updateRegisterRoleFields() {
+  const role = registerRole.value;
+  classroomField.classList.toggle('hidden', role !== 'student');
+  classSelect.required = role === 'student';
+  childClassesField.classList.toggle('hidden', role !== 'parent');
+  childClassesSelect.required = role === 'parent';
+}
+registerRole.addEventListener('change', updateRegisterRoleFields);
+updateRegisterRoleFields();
+childClassesSelect.addEventListener('change', () => {
+  const selected = [...childClassesSelect.selectedOptions];
+  if (selected.length > 5) {
+    selected[selected.length - 1].selected = false;
+    alert('Możesz wybrać maksymalnie 5 klas.');
+  }
+});
+
+function logout(message) {
+  localStorage.removeItem('schoolUser');
+  currentUser = null;
+  document.querySelector('#homeAdmin')?.remove();
+  document.querySelector('#logoutButton')?.remove();
+  document.querySelector('#loginLayer').classList.remove('hidden');
+  screen('startScreen');
+  show('home');
+  if (message) alert(message);
+}
+
 function finishLogin(user) {
-  currentUser = { name: user.name, classroom: user.classroom };
+  currentUser = { name: user.name, classroom: user.classroom, role: user.role || 'student', childClasses: user.childClasses || [] };
   localStorage.setItem('schoolUser', JSON.stringify(currentUser));
+  state.viewingClassroom = accessibleClasses(currentUser)[0];
   document.querySelector('#loginLayer').classList.add('hidden');
   setupUserInterface();
 }
@@ -817,10 +924,27 @@ document.querySelector('#registerForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const name = capitalize(document.querySelector('#registerUsername').value.trim());
   if (accounts.some((x) => normalise(x.name) === normalise(name))) return alert('Takie konto już istnieje.');
-  const user = { name, classroom: classSelect.value, password: document.querySelector('#registerPassword').value, admin: normalise(name) === 'tpraglowski' };
+  const role = registerRole.value;
+  const childClasses = role === 'parent' ? [...childClassesSelect.selectedOptions].map((o) => o.value) : [];
+  if (role === 'parent' && (!childClasses.length || childClasses.length > 5)) return alert('Wybierz od 1 do 5 klas dziecka.');
+  const classroom = role === 'student' ? classSelect.value : role === 'parent' ? childClasses[0] : null;
+  const pending = role === 'teacher';
+  const user = { name, role, classroom, childClasses, pending, password: document.querySelector('#registerPassword').value, admin: normalise(name) === 'tpraglowski' };
   accounts.push(user);
-  saveAccounts();
-  if (!subjectsForClass(user.classroom).length) seedClassSubjectsFromStarter(user.classroom);
+  setDoc(accountDocRef(user.name), user);
+  if (role === 'student') {
+    if (!subjectsForClass(user.classroom).length) seedClassSubjectsFromStarter(user.classroom);
+  } else if (role === 'parent') {
+    childClasses.forEach((cls) => { if (!subjectsForClass(cls).length) seedClassSubjectsFromStarter(cls); });
+  }
+  if (pending) {
+    registerRole.value = 'student';
+    updateRegisterRoleFields();
+    document.querySelector('#registerForm').reset();
+    screen('startScreen');
+    alert('Konto nauczyciela zostało utworzone i oczekuje na zatwierdzenie przez administratora. Zaloguj się, gdy zostanie zatwierdzone.');
+    return;
+  }
   finishLogin(user);
 });
 
@@ -828,32 +952,130 @@ document.querySelector('#loginForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const user = accounts.find((x) => normalise(x.name) === normalise(document.querySelector('#username').value) && x.password === document.querySelector('#password').value);
   if (!user) return alert('Nieprawidłowa nazwa użytkownika lub hasło.');
+  if (user.role === 'teacher' && user.pending) return alert('Konto nauczyciela oczekuje jeszcze na zatwierdzenie przez administratora.');
   finishLogin(user);
 });
 
 function renderAccounts() {
   const el = document.querySelector('#accountList');
-  el.innerHTML = accounts.length ? accounts.map((a) =>
-    `<div class="relative rounded-r-xl border-l-[5px] border-amber-500 bg-amber-50 py-3.5 pl-4 pr-32 text-amber-900">
-      <b class="block">${escapeHtml(a.name)} · klasa ${a.classroom}</b><span class="text-[.9em] text-amber-800">${a.admin ? 'Administrator' : 'Uczeń'}</span>
-      <button class="absolute right-[7.5rem] top-3 rounded-lg bg-white/70 px-2 py-1.5 font-bold text-amber-800" data-account="${escapeHtml(a.name)}">Zmień dostęp</button>
-      <button class="absolute right-2.5 top-3 rounded-lg bg-white/70 px-2 py-1.5 font-bold text-amber-800" data-remove-account="${escapeHtml(a.name)}">Usuń</button>
+  const approved = accounts.filter((a) => !(a.role === 'teacher' && a.pending));
+  el.innerHTML = approved.length ? approved.map((a) =>
+    `<div class="rounded-r-xl border-l-[5px] border-amber-500 bg-amber-50 py-3.5 pl-4 pr-4 text-amber-900">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <b class="block">${escapeHtml(a.name)}${a.role === 'student' ? ` · klasa ${a.classroom}` : ''}</b>
+          <span class="text-[.9em] text-amber-800">${roleLabel(a)}</span>
+        </div>
+        <div class="flex shrink-0 gap-1.5">
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-amber-800" data-edit-account="${escapeHtml(a.name)}">Edytuj</button>
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-amber-800" data-account="${escapeHtml(a.name)}">Zmień dostęp</button>
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-red-700" data-remove-account="${escapeHtml(a.name)}">Usuń</button>
+        </div>
+      </div>
     </div>`
   ).join('') : `<div class="col-span-full rounded-[20px] border-2 border-dashed border-line px-5 py-11 text-center text-muted">Brak kont.</div>`;
 
+  el.querySelectorAll('[data-edit-account]').forEach((b) => b.addEventListener('click', () => openAccountEditor(b.dataset.editAccount)));
   el.querySelectorAll('[data-account]').forEach((b) => b.addEventListener('click', () => {
     const account = accounts.find((a) => normalise(a.name) === normalise(b.dataset.account));
     account.admin = !account.admin;
-    saveAccounts();
+    setDoc(accountDocRef(account.name), account);
     renderAccounts();
   }));
   el.querySelectorAll('[data-remove-account]').forEach((b) => b.addEventListener('click', () => {
     if (normalise(b.dataset.removeAccount) === 'tpraglowski' || !confirm('Usunąć to konto?')) return;
     accounts = accounts.filter((a) => normalise(a.name) !== normalise(b.dataset.removeAccount));
-    saveAccounts();
+    deleteDoc(accountDocRef(b.dataset.removeAccount));
     renderAccounts();
   }));
 }
+
+function renderPendingTeachers() {
+  const el = document.querySelector('#pendingTeachers');
+  if (!el) return;
+  const pending = accounts.filter((a) => a.role === 'teacher' && a.pending);
+  el.innerHTML = pending.length ? pending.map((a) => `
+    <div class="rounded-r-xl border-l-[5px] border-amber-500 bg-amber-50 py-3.5 pl-4 pr-4 text-amber-900">
+      <div class="flex items-center justify-between gap-3">
+        <b class="block">${escapeHtml(a.name)} <span class="ml-1 rounded bg-amber-200 px-1.5 py-0.5 text-xs font-bold">Nauczyciel</span></b>
+        <div class="flex shrink-0 gap-1.5">
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-green-700" data-approve-teacher="${escapeHtml(a.name)}">Zatwierdź</button>
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-red-700" data-reject-teacher="${escapeHtml(a.name)}">Odrzuć</button>
+        </div>
+      </div>
+    </div>`
+  ).join('') : `<div class="col-span-full rounded-[20px] border-2 border-dashed border-line px-5 py-11 text-center text-muted">Brak zgłoszeń.</div>`;
+  el.querySelectorAll('[data-approve-teacher]').forEach((b) => b.addEventListener('click', () => {
+    const account = accounts.find((a) => normalise(a.name) === normalise(b.dataset.approveTeacher));
+    account.pending = false;
+    setDoc(accountDocRef(account.name), account);
+    renderPendingTeachers();
+    renderAccounts();
+  }));
+  el.querySelectorAll('[data-reject-teacher]').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Odrzucić to konto nauczyciela?')) return;
+    accounts = accounts.filter((a) => normalise(a.name) !== normalise(b.dataset.rejectTeacher));
+    deleteDoc(accountDocRef(b.dataset.rejectTeacher));
+    renderPendingTeachers();
+  }));
+}
+
+// ---------- Admin: edit any account's role/class ----------
+const accountEditorDialog = document.querySelector('#accountEditor');
+const editAccountRole = document.querySelector('#editAccountRole');
+const editAccountClassField = document.querySelector('#editAccountClassField');
+const editAccountClass = document.querySelector('#editAccountClass');
+const editAccountChildClassesField = document.querySelector('#editAccountChildClassesField');
+const editAccountChildClasses = document.querySelector('#editAccountChildClasses');
+editAccountClass.innerHTML = classOptionsHtml;
+editAccountChildClasses.innerHTML = classOptionsHtml;
+let editingAccountName = null;
+
+function updateEditAccountFields() {
+  const role = editAccountRole.value;
+  editAccountClassField.classList.toggle('hidden', role !== 'student');
+  editAccountChildClassesField.classList.toggle('hidden', role !== 'parent');
+}
+editAccountRole.addEventListener('change', updateEditAccountFields);
+editAccountChildClasses.addEventListener('change', () => {
+  const selected = [...editAccountChildClasses.selectedOptions];
+  if (selected.length > 5) {
+    selected[selected.length - 1].selected = false;
+    alert('Możesz wybrać maksymalnie 5 klas.');
+  }
+});
+
+function openAccountEditor(name) {
+  const account = accounts.find((a) => normalise(a.name) === normalise(name));
+  if (!account) return;
+  editingAccountName = account.name;
+  document.querySelector('#editAccountName').value = account.name;
+  editAccountRole.value = account.role || 'student';
+  editAccountClass.value = account.classroom || classCodes[0];
+  [...editAccountChildClasses.options].forEach((o) => { o.selected = (account.childClasses || []).includes(o.value); });
+  updateEditAccountFields();
+  accountEditorDialog.showModal();
+}
+document.querySelector('#cancelAccountEditor').addEventListener('click', () => accountEditorDialog.close('cancel'));
+
+accountEditorDialog.addEventListener('close', () => {
+  if (accountEditorDialog.returnValue !== 'save' || !editingAccountName) return;
+  const oldName = editingAccountName;
+  const newName = capitalize(document.querySelector('#editAccountName').value.trim());
+  if (!newName) return;
+  const nameChanged = normalise(newName) !== normalise(oldName);
+  if (nameChanged && accounts.some((a) => normalise(a.name) === normalise(newName))) return alert('Konto o tej nazwie już istnieje.');
+  const role = editAccountRole.value;
+  const childClasses = role === 'parent' ? [...editAccountChildClasses.selectedOptions].map((o) => o.value) : [];
+  if (role === 'parent' && (!childClasses.length || childClasses.length > 5)) return alert('Wybierz od 1 do 5 klas dziecka.');
+  const classroom = role === 'student' ? editAccountClass.value : role === 'parent' ? childClasses[0] : null;
+  const original = accounts.find((a) => normalise(a.name) === normalise(oldName));
+  const updated = { ...original, name: newName, role, classroom, childClasses, pending: false };
+  accounts = accounts.map((a) => (normalise(a.name) === normalise(oldName) ? updated : a));
+  if (nameChanged) deleteDoc(accountDocRef(oldName));
+  setDoc(accountDocRef(newName), updated);
+  renderAccounts();
+});
 
 function setupUserInterface() {
   document.querySelector('#homeAdmin')?.remove();
@@ -866,6 +1088,7 @@ function setupUserInterface() {
       <p class="relative mt-1.5 text-white/85">Konta i uprawnienia</p>
     </button>`);
     renderAccounts();
+    renderPendingTeachers();
     const adminClassSelect = document.querySelector('#adminClassSelect');
     adminClassSelect.innerHTML = classOptionsHtml;
     adminClassSelect.value = currentUser?.classroom || classCodes[0];
@@ -882,13 +1105,7 @@ function setupUserInterface() {
   renderSchedule();
   renderAnnouncements();
   document.querySelector('#settingsPanel').insertAdjacentHTML('beforeend', `<button class="mt-[18px] rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" id="logoutButton">Wyloguj się</button>`);
-  document.querySelector('#logoutButton').addEventListener('click', () => {
-    localStorage.removeItem('schoolUser');
-    currentUser = null;
-    document.querySelector('#loginLayer').classList.remove('hidden');
-    screen('startScreen');
-    show('home');
-  });
+  document.querySelector('#logoutButton').addEventListener('click', () => logout());
 }
 
 async function boot() {
@@ -904,8 +1121,15 @@ async function boot() {
   document.querySelector('#loginLayer').classList.remove('hidden');
 
   if (currentUser) {
-    document.querySelector('#loginLayer').classList.add('hidden');
-    setupUserInterface();
+    if (accountStillExists(currentUser)) {
+      const latest = accounts.find((a) => normalise(a.name) === normalise(currentUser.name));
+      if (latest) currentUser = { name: latest.name, classroom: latest.classroom, role: latest.role || 'student', childClasses: latest.childClasses || [] };
+      state.viewingClassroom = accessibleClasses(currentUser)[0];
+      document.querySelector('#loginLayer').classList.add('hidden');
+      setupUserInterface();
+    } else {
+      logout('Twoje konto zostało usunięte przez administratora.');
+    }
   }
 
   renderSubjects();

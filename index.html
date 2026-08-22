@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Moja Szkoła</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -74,6 +75,10 @@
           <div><h2 class="text-[1.2em] font-bold tracking-tight" id="scheduleDayTitle">Plan lekcji</h2><span class="text-muted" id="todayDate"></span></div>
           <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addLesson">+ Dodaj lekcję</button>
         </div>
+        <div class="mb-[17px] hidden grid gap-[7px]" id="viewingClassField">
+          <label class="text-sm font-bold text-muted" for="viewingClassSelect">Wyświetlana klasa</label>
+          <select class="w-full rounded-xl border border-line bg-app px-3 py-2 font-bold text-ink sm:w-52" id="viewingClassSelect"></select>
+        </div>
         <div class="mb-[17px] flex flex-wrap gap-1.5" id="scheduleDayTabs"></div>
         <div class="grid gap-2.5" id="lessonList"></div>
       </div>
@@ -138,13 +143,17 @@
             <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="dark">☾ Ciemny</button>
           </div>
         </div>
-        <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]" data-setting>
-          <div><h2 class="text-[1.2em] font-bold tracking-tight">Kolor tła</h2><p class="mt-1 text-sm text-muted">Wybierz kolor tła aplikacji.</p></div>
-          <div class="flex gap-2" id="backgrounds">
-            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#f5f7ff" data-bg="#f5f7ff" aria-label="Jasnoniebieskie tło"></button>
-            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#fff7ed" data-bg="#fff7ed" aria-label="Kremowe tło"></button>
-            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#f0fdf4" data-bg="#f0fdf4" aria-label="Zielone tło"></button>
-            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#fdf2f8" data-bg="#fdf2f8" aria-label="Różowe tło"></button>
+        <div class="grid grid-rows-[1fr] overflow-hidden transition-[grid-template-rows] duration-300 ease-out" id="colourSettingWrap">
+          <div class="overflow-hidden">
+            <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] opacity-100 transition-opacity duration-200 sm:grid-cols-[1fr_auto]" data-setting>
+              <div><h2 class="text-[1.2em] font-bold tracking-tight">Kolor tła</h2><p class="mt-1 text-sm text-muted">Wybierz kolor tła aplikacji.</p></div>
+              <div class="flex gap-2" id="backgrounds">
+                <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#f5f7ff" data-bg="#f5f7ff" aria-label="Jasnoniebieskie tło"></button>
+                <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#fff7ed" data-bg="#fff7ed" aria-label="Kremowe tło"></button>
+                <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#f0fdf4" data-bg="#f0fdf4" aria-label="Zielone tło"></button>
+                <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#fdf2f8" data-bg="#fdf2f8" aria-label="Różowe tło"></button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="grid grid-cols-1 items-center gap-5 py-[18px] sm:grid-cols-[1fr_auto]">
@@ -154,7 +163,7 @@
             <button class="smile-bg h-[34px] w-[49px] rounded-[10px] border border-line p-0" data-pattern="smile" aria-label="Żółte uśmiechy"></button>
             <button class="heart-bg h-[34px] w-[49px] rounded-[10px] border border-line p-0" data-pattern="heart" aria-label="Różowe serca"></button>
             <button class="star-bg h-[34px] w-[49px] rounded-[10px] border border-line p-0" data-pattern="star" aria-label="Zielone gwiazdki"></button>
-            <button class="h-[34px] w-[49px] rounded-[10px] border border-line bg-[#e2e8f0] p-0" data-pattern="panda" aria-label="Małe pandy">🐼</button>
+            <button class="panda-bg h-[34px] w-[49px] rounded-[10px] border border-line p-0" data-pattern="panda" aria-label="Małe pandy"></button>
           </div>
         </div>
       </div>
@@ -169,6 +178,13 @@
           <span class="text-muted">Konta bez haseł</span>
         </div>
         <div class="grid gap-2.5" id="accountList"></div>
+      </div>
+      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
+        <div class="mb-[17px] flex items-center justify-between gap-3">
+          <h2 class="text-[1.2em] font-bold tracking-tight">Oczekujący nauczyciele</h2>
+          <span class="text-muted">Wymagają zatwierdzenia</span>
+        </div>
+        <div class="grid gap-2.5" id="pendingTeachers"></div>
       </div>
       <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
         <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3">
@@ -244,6 +260,36 @@
       </div>
       <div class="mt-[21px] flex justify-end gap-[9px]">
         <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelEditor">Anuluj</button>
+        <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" value="save">Zapisz</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="w-[min(420px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="accountEditor">
+    <form class="p-6" method="dialog">
+      <h2 class="mb-[18px] text-[1.35em] font-bold">Edytuj konto</h2>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="editAccountName">Nazwa użytkownika</label>
+        <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="editAccountName" required maxlength="30" />
+      </div>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="editAccountRole">Rola</label>
+        <select class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="editAccountRole">
+          <option value="student">Uczeń</option>
+          <option value="teacher">Nauczyciel</option>
+          <option value="parent">Rodzic</option>
+        </select>
+      </div>
+      <div class="my-[14px] grid gap-[7px]" id="editAccountClassField">
+        <label class="text-[.93em] font-bold" for="editAccountClass">Klasa</label>
+        <select class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="editAccountClass"></select>
+      </div>
+      <div class="my-[14px] hidden grid gap-[7px]" id="editAccountChildClassesField">
+        <label class="text-[.93em] font-bold" for="editAccountChildClasses">Klasa(y) dziecka <span class="font-normal text-muted">(max. 5)</span></label>
+        <select class="min-h-[160px] rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="editAccountChildClasses" multiple></select>
+      </div>
+      <div class="mt-[21px] flex justify-end gap-[9px]">
+        <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelAccountEditor">Anuluj</button>
         <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" value="save">Zapisz</button>
       </div>
     </form>
@@ -352,12 +398,26 @@
         <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="registerPassword" name="new-password" type="password" autocomplete="new-password" required minlength="3" />
       </div>
       <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="registerRole">Kim jesteś?</label>
+        <select class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="registerRole">
+          <option value="student">Uczeń</option>
+          <option value="teacher">Nauczyciel</option>
+          <option value="parent">Rodzic</option>
+        </select>
+      </div>
+      <div class="my-[14px] grid gap-[7px]" id="classroomField">
         <label class="text-[.93em] font-bold" for="classroom">Klasa</label>
         <select class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="classroom" required>
           <option value="" selected disabled>Wybierz klasę</option>
         </select>
       </div>
-      <button class="w-full rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" type="submit">Utwórz konto</button>
+      <div class="my-[14px] hidden grid gap-[7px]" id="childClassesField">
+        <label class="text-[.93em] font-bold" for="childClasses">Klasa(y) dziecka <span class="font-normal text-muted">(max. 5)</span></label>
+        <select class="min-h-[160px] rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="childClasses" multiple>
+        </select>
+      </div>
+      <p class="mt-1 text-xs text-muted">Nauczyciel widzi plan lekcji i ogłoszenia wszystkich klas. Rodzic widzi to, co dotyczy klas wybranych dzieci. Oba konta mogą przełączać wyświetlaną klasę.</p>
+      <button class="mt-3 w-full rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" type="submit">Utwórz konto</button>
       <button class="mt-2.5 w-full rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" data-start>Wróć</button>
     </form>
   </div>

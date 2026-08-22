@@ -31,7 +31,7 @@ jobs:
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
         run: |
           mkdir -p dist
-          cp index.html script.js styles.css dist/
+          cp index.html script.js styles.css favicon.svg dist/
           cat > dist/firebase-config.js <<EOF
           export const firebaseConfig = {
             apiKey: '${FIREBASE_API_KEY}',

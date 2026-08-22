@@ -28,6 +28,13 @@ body.dark {
 .smile-bg { background-image: radial-gradient(circle at 15px 15px, #ffd54f 0 10px, transparent 11px), radial-gradient(circle at 38px 30px, #ffd54f 0 9px, transparent 10px); }
 .heart-bg { background-image: radial-gradient(circle at 12px 13px, #f9a8d4 0 9px, transparent 10px), radial-gradient(circle at 33px 26px, #f9a8d4 0 10px, transparent 11px); }
 .star-bg { background-image: radial-gradient(circle at 15px 15px, #a7f3d0 0 7px, transparent 8px), radial-gradient(circle at 37px 28px, #a7f3d0 0 9px, transparent 10px); }
+.panda-bg {
+  background-color: var(--card);
+  background-image:
+    radial-gradient(circle at 14px 13px, transparent 0 4px, #47556980 5px, transparent 6px),
+    radial-gradient(circle at 30px 13px, transparent 0 4px, #47556980 5px, transparent 6px),
+    radial-gradient(circle at 22px 22px, transparent 0 8px, #47556980 9px, transparent 10px);
+}
 
 /* Full-page background patterns, toggled on <body> */
 body.pattern-smile {
@@ -43,6 +50,7 @@ body.pattern-star {
   background-size: 120px 120px;
 }
 body.pattern-panda {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Ccircle cx='31' cy='30' r='12' fill='%23334155'/%3E%3Ccircle cx='65' cy='30' r='12' fill='%23334155'/%3E%3Ccircle cx='48' cy='50' r='28' fill='%23f8fafc' stroke='%2394a3b8' stroke-width='2'/%3E%3Cellipse cx='38' cy='47' rx='9' ry='11' fill='%23334155'/%3E%3Cellipse cx='58' cy='47' rx='9' ry='11' fill='%23334155'/%3E%3Ccircle cx='39' cy='48' r='3' fill='white'/%3E%3Ccircle cx='57' cy='48' r='3' fill='white'/%3E%3Ccircle cx='48' cy='59' r='4' fill='%23334155'/%3E%3C/svg%3E");
+  /* Single-colour outline only (no fill) so the pattern stays a faint watermark and never fights with text contrast. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cg fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' opacity='.35'%3E%3Ccircle cx='31' cy='30' r='11'/%3E%3Ccircle cx='65' cy='30' r='11'/%3E%3Ccircle cx='48' cy='52' r='27'/%3E%3Cellipse cx='38' cy='49' rx='8' ry='10'/%3E%3Cellipse cx='58' cy='49' rx='8' ry='10'/%3E%3Ccircle cx='48' cy='60' r='3'/%3E%3C/g%3E%3C/svg%3E");
   background-size: 96px 96px;
 }
