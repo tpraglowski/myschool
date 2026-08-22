@@ -31,6 +31,9 @@ const classCodes = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((n) => ['A', 'B', 'C'].map((
 const classOptionsHtml = classCodes.map((c) => `<option value="${c}">${c}</option>`).join('');
 const classroomOptionsHtml = (includeAll) => (includeAll ? '<option value="all">Wszystkie klasy</option>' : '') + classOptionsHtml;
 const classLabel = (cls) => (cls === 'all' ? 'Wszystkie klasy' : cls);
+const gradeNumbers = [1, 2, 3, 4, 5, 6, 7, 8];
+const gradeOfClass = (cls) => cls.slice(0, -1);
+const gradeTabItems = gradeNumbers.map((n) => ({ code: String(n), label: `Klasa ${n}` }));
 
 // Migrate the old single shared schedule (pre-per-class) into class 1A so existing data isn't lost,
 // and backfill fields added later (addedBy / classroom / pending / date / time) for data saved by older versions.
@@ -44,23 +47,39 @@ const normalizeLessonsByClass = (byClass) => {
 const initialLessonsByClass = normalizeLessonsByClass(storedLessonsByClass || { '1A': legacyLessons || defaultLessons });
 
 const storedAnnouncements = JSON.parse(localStorage.getItem('schoolAnnouncements') || 'null');
-const normalizeAnnouncements = (list) => (list || []).map((a) => ({ classroom: a.lessonId ? '1A' : 'all', pending: false, date: '', time: '', ...a }));
+const normalizeAnnouncements = (list) => (list || []).map((a) => ({ classroom: a.lessonId ? '1A' : 'all', pending: false, date: '', time: '', createdBy: '', ...a }));
 
 // Subjects/competences are per class too; the old global list migrates into 1A.
+// Items also carry addedBy (admin-seeded vs student-added) so students can't
+// delete/extend what the admin's starter package put there.
 const legacySubjects = JSON.parse(localStorage.getItem('schoolSubjects') || 'null');
 const storedSubjectsByClass = JSON.parse(localStorage.getItem('schoolSubjectsByClass') || 'null');
-const initialSubjectsByClass = storedSubjectsByClass || { '1A': legacySubjects || defaultSubjects };
-const starterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null') || JSON.parse(JSON.stringify(defaultSubjects));
+const normalizeSubjectsByClass = (byClass) => {
+  const out = {};
+  for (const [cls, subjects] of Object.entries(byClass || {})) {
+    out[cls] = (subjects || []).map((s) => ({ addedBy: 'admin', ...s, competences: (s.competences || []).map((c) => ({ addedBy: 'admin', ...c })) }));
+  }
+  return out;
+};
+const initialSubjectsByClass = normalizeSubjectsByClass(storedSubjectsByClass || { '1A': legacySubjects || defaultSubjects });
+
+// Starter competence packages are per grade (1-8), ignoring the A/B/C section letter.
+const storedStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
+const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
+const initialStarterSubjectsByGrade = storedStarterByGrade || Object.fromEntries(
+  gradeNumbers.map((n) => [String(n), JSON.parse(JSON.stringify(legacyStarterSubjects || defaultSubjects))])
+);
 
 const state = {
   subjectsByClass: initialSubjectsByClass,
-  starterSubjects,
+  starterSubjectsByGrade: initialStarterSubjectsByGrade,
   lessonsByClass: initialLessonsByClass,
   announcements: normalizeAnnouncements(storedAnnouncements || defaultAnnouncements),
   activeSubject: null,
   activeTemplateSubject: null,
   mode: 'subject',
   subjectTarget: 'class',
+  adminStarterGrade: '1',
   editAnnouncement: null,
   editLesson: null,
   lessonTargetClass: null,
@@ -73,18 +92,20 @@ const state = {
 };
 
 const saveSubjectsByClass = () => localStorage.setItem('schoolSubjectsByClass', JSON.stringify(state.subjectsByClass));
-const saveStarterSubjects = () => localStorage.setItem('schoolStarterSubjects', JSON.stringify(state.starterSubjects));
+const saveStarterSubjectsByGrade = () => localStorage.setItem('schoolStarterSubjectsByGrade', JSON.stringify(state.starterSubjectsByGrade));
 const saveLessonsByClass = () => localStorage.setItem('schoolLessonsByClass', JSON.stringify(state.lessonsByClass));
 const saveAnnouncements = () => localStorage.setItem('schoolAnnouncements', JSON.stringify(state.announcements));
 const classLessons = (cls) => state.lessonsByClass[cls] || (state.lessonsByClass[cls] = []);
 const subjectsForClass = (cls) => state.subjectsByClass[cls] || (state.subjectsByClass[cls] = []);
+const starterSubjectsForGrade = (grade) => state.starterSubjectsByGrade[grade] || (state.starterSubjectsByGrade[grade] = []);
 
 function seedClassSubjectsFromStarter(cls) {
-  state.subjectsByClass[cls] = state.starterSubjects.map((s) => ({
+  state.subjectsByClass[cls] = starterSubjectsForGrade(gradeOfClass(cls)).map((s) => ({
     id: crypto.randomUUID(),
     name: s.name,
     gradient: s.gradient,
-    competences: s.competences.map((c) => ({ id: crypto.randomUUID(), name: c.name })),
+    addedBy: 'admin',
+    competences: s.competences.map((c) => ({ id: crypto.randomUUID(), name: c.name, addedBy: 'admin' })),
   }));
   saveSubjectsByClass();
 }
@@ -138,9 +159,10 @@ function card(item, type) {
   const body = type === 'subject'
     ? `Zdobyte: ${earned}/${item.competences.length}`
     : `<span class="mt-2 inline-block rounded-lg bg-white/25 px-2 py-1 text-[.78em] font-extrabold text-white">${status.label}</span>`;
+  const canDelete = isAdmin() || item.addedBy !== 'admin';
   return `<article class="group relative min-h-[172px] cursor-pointer overflow-hidden rounded-[25px] p-5 text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" style="background:${background}" data-id="${item.id}" data-type="${type}" tabindex="0" role="button">
     <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
-    <button class="absolute right-3 top-3 z-10 rounded-lg bg-black/30 px-2 py-1 text-sm font-bold opacity-0 transition group-hover:opacity-100" title="Usuń" data-delete="${item.id}" data-type="${type}">Usuń</button>
+    ${canDelete ? `<button class="absolute right-3 top-3 z-10 rounded-lg bg-black/30 px-2 py-1 text-sm font-bold opacity-0 transition group-hover:opacity-100" title="Usuń" data-delete="${item.id}" data-type="${type}">Usuń</button>` : ''}
     <h2 class="relative mt-14 text-[1.3em] font-bold tracking-tight">${escapeHtml(item.name)}</h2>
     <p class="relative mt-1 text-[.9em] text-white/85">${body}</p>
   </article>`;
@@ -165,6 +187,8 @@ function renderCompetences() {
     ? subject.competences.map((x) => card(x, 'competence')).join('')
     : emptyState('Brak kompetencji', 'Dodaj pierwszą kompetencję dla tego przedmiotu.');
   bindCards(el);
+  const canAddCompetence = isAdmin() || subject.addedBy !== 'admin';
+  document.querySelector('#addCompetence').classList.toggle('hidden', !canAddCompetence);
 }
 
 function emptyState(title, text) {
@@ -220,6 +244,7 @@ statusDialog.addEventListener('close', () => {
   activeCompetence.status = document.querySelector('#statusSelect').value;
   saveSubjectsByClass();
   renderCompetences();
+  renderSubjects();
 });
 
 // ---------- Subject / competence / announcement editor dialog ----------
@@ -256,7 +281,7 @@ function openEditor(mode, announcementId = null, target = 'class') {
   const isReplacement = state.forceReplacement || !!existing?.lessonId;
   const admin = isAdmin();
   state.isReplacementEditing = isReplacement;
-  const subjectsInScope = target === 'template' ? state.starterSubjects : subjectsForClass(currentUser?.classroom);
+  const subjectsInScope = target === 'template' ? starterSubjectsForGrade(state.adminStarterGrade) : subjectsForClass(currentUser?.classroom);
   state.chosenGradient = gradients[subjectsInScope.length % gradients.length];
 
   document.querySelector('#modalTitle').textContent = isAnnouncement ? (existing ? 'Edytuj wpis' : isReplacement ? (admin ? 'Dodaj zastępstwo' : 'Zgłoś zastępstwo') : 'Dodaj wpis') : mode === 'subject' ? 'Dodaj przedmiot' : 'Dodaj kompetencję';
@@ -331,7 +356,7 @@ dialog.addEventListener('close', () => {
       Object.assign(item, { title: name, text, lessonId, type, classroom, date, time });
       if (isReplacement) item.pending = pending;
     } else {
-      state.announcements.push({ id: crypto.randomUUID(), title: name, text, lessonId, type, classroom, date, time, pending });
+      state.announcements.push({ id: crypto.randomUUID(), title: name, text, lessonId, type, classroom, date, time, pending, createdBy: currentUser?.name || '' });
     }
     saveAnnouncements();
     renderAnnouncements();
@@ -342,7 +367,8 @@ dialog.addEventListener('close', () => {
 
   const item = { id: crypto.randomUUID(), name };
   const isTemplate = state.subjectTarget === 'template';
-  const subjects = isTemplate ? state.starterSubjects : subjectsForClass(currentUser.classroom);
+  const subjects = isTemplate ? starterSubjectsForGrade(state.adminStarterGrade) : subjectsForClass(currentUser.classroom);
+  if (!isTemplate) item.addedBy = isAdmin() ? 'admin' : 'student';
   if (state.mode === 'subject') {
     item.gradient = state.chosenGradient;
     item.competences = [];
@@ -352,7 +378,7 @@ dialog.addEventListener('close', () => {
     subjects.find((x) => x.id === activeId).competences.push(item);
   }
   if (isTemplate) {
-    saveStarterSubjects();
+    saveStarterSubjectsByGrade();
     renderStarterSubjects();
   } else {
     saveSubjectsByClass();
@@ -413,11 +439,14 @@ lessonDialog.addEventListener('close', () => {
   if (document.querySelector('#adminClassSelect')?.value === state.lessonTargetClass) renderAdminLessonTable();
 });
 
-function renderDayTabs(container, activeDay, onSelect) {
-  container.innerHTML = weekdays.map((d) =>
-    `<button type="button" class="rounded-[9px] border px-3 py-1.5 text-sm font-bold${d.code === activeDay ? ' border-primary bg-primary text-white' : ' border-line bg-app text-muted'}" data-day="${d.code}">${d.label}</button>`
+function renderTabs(container, items, activeCode, onSelect) {
+  container.innerHTML = items.map((d) =>
+    `<button type="button" class="rounded-[9px] border px-3 py-1.5 text-sm font-bold${d.code === activeCode ? ' border-primary bg-primary text-white' : ' border-line bg-app text-muted'}" data-tab="${d.code}">${d.label}</button>`
   ).join('');
-  container.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => onSelect(b.dataset.day)));
+  container.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => onSelect(b.dataset.tab)));
+}
+function renderDayTabs(container, activeDay, onSelect) {
+  renderTabs(container, weekdays, activeDay, onSelect);
 }
 
 function renderSchedule() {
@@ -513,7 +542,10 @@ function renderAnnouncements() {
       </div>
       <h2 class="mt-9 text-[1.2em] font-bold">${escapeHtml(x.title)}</h2><p class="mt-1 text-[.9em]">${escapeHtml(x.text)}</p>
       ${meta ? `<p class="mt-2 text-xs font-bold opacity-80">${escapeHtml(meta)}</p>` : ''}
-      ${admin ? `<span class="mt-2 inline-block rounded bg-white/60 px-1.5 py-0.5 text-xs font-bold">${escapeHtml(classLabel(x.classroom))}</span>` : ''}
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        ${admin ? `<span class="inline-block rounded bg-white/60 px-1.5 py-0.5 text-xs font-bold">${escapeHtml(classLabel(x.classroom))}</span>` : ''}
+        ${x.createdBy ? `<span class="inline-block rounded bg-white/60 px-1.5 py-0.5 text-xs font-bold">@${escapeHtml(x.createdBy)}</span>` : ''}
+      </div>
     </article>`;
   }).join('') : emptyState('Brak ogłoszeń', 'Dodaj pierwszy szkolny plakat.');
 
@@ -563,6 +595,7 @@ function renderPendingReplacements() {
         <div>
           <b class="block">${escapeHtml(x.title)} <span class="ml-1 rounded bg-amber-200 px-1.5 py-0.5 text-xs font-bold">${escapeHtml(x.classroom)}</span></b>
           <span class="text-[.9em] text-amber-800">${escapeHtml(x.text)}</span>
+          ${x.createdBy ? `<span class="ml-1 text-xs font-bold text-amber-700">zgłosił @${escapeHtml(x.createdBy)}</span>` : ''}
         </div>
         <div class="flex shrink-0 gap-1.5">
           <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-green-700" data-approve-replacement="${x.id}">Zatwierdź</button>
@@ -587,11 +620,14 @@ function renderPendingReplacements() {
   }));
 }
 
-// ---------- Admin: starter competences package ----------
+// ---------- Admin: starter competences package (per grade 1-8) ----------
 function renderStarterSubjects() {
   const el = document.querySelector('#starterSubjectList');
   if (!el) return;
-  el.innerHTML = state.starterSubjects.length ? state.starterSubjects.map((s) => `
+  const tabsEl = document.querySelector('#starterGradeTabs');
+  if (tabsEl) renderTabs(tabsEl, gradeTabItems, state.adminStarterGrade, (grade) => { state.adminStarterGrade = grade; renderStarterSubjects(); });
+  const subjects = starterSubjectsForGrade(state.adminStarterGrade);
+  el.innerHTML = subjects.length ? subjects.map((s) => `
     <div class="rounded-2xl border border-line p-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-2">
@@ -619,16 +655,16 @@ function renderStarterSubjects() {
   }));
   el.querySelectorAll('[data-delete-starter-subject]').forEach((b) => b.addEventListener('click', () => {
     if (!confirm('Usunąć ten przedmiot z pakietu startowego?')) return;
-    state.starterSubjects = state.starterSubjects.filter((s) => s.id !== b.dataset.deleteStarterSubject);
-    saveStarterSubjects();
+    state.starterSubjectsByGrade[state.adminStarterGrade] = subjects.filter((s) => s.id !== b.dataset.deleteStarterSubject);
+    saveStarterSubjectsByGrade();
     renderStarterSubjects();
   }));
   el.querySelectorAll('[data-delete-starter-competence]').forEach((b) => b.addEventListener('click', () => {
     if (!confirm('Usunąć tę kompetencję z pakietu startowego?')) return;
     const [subjectId, competenceId] = b.dataset.deleteStarterCompetence.split('|');
-    const subject = state.starterSubjects.find((s) => s.id === subjectId);
+    const subject = subjects.find((s) => s.id === subjectId);
     subject.competences = subject.competences.filter((c) => c.id !== competenceId);
-    saveStarterSubjects();
+    saveStarterSubjectsByGrade();
     renderStarterSubjects();
   }));
 }
@@ -764,6 +800,7 @@ function setupUserInterface() {
     document.querySelector('#addAdminLesson').addEventListener('click', () => openLessonEditor(null, adminClassSelect.value, state.adminScheduleDay));
     renderAdminLessonTable();
     renderPendingReplacements();
+    state.adminStarterGrade = currentUser?.classroom ? gradeOfClass(currentUser.classroom) : '1';
     renderStarterSubjects();
   }
   document.querySelector('#addReplacement').textContent = isAdmin() ? '+ Dodaj zastępstwo' : '+ Zgłoś zastępstwo';
