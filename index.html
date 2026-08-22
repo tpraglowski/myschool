@@ -168,6 +168,18 @@
         </div>
         <div class="grid gap-2.5" id="accountList"></div>
       </div>
+      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
+        <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-[1.2em] font-bold tracking-tight">Plan lekcji klasy</h2>
+          <div class="flex items-center gap-2">
+            <select class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-2 text-ink" id="adminClassSelect">
+              <!-- options filled by classOptionsHtml -->
+            </select>
+            <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addAdminLesson">+ Dodaj lekcję</button>
+          </div>
+        </div>
+        <div id="adminLessonTable"></div>
+      </div>
     </section>
   </main>
 

@@ -15,23 +15,32 @@ const defaultAnnouncements = [
   { id: 'room-change', title: 'Zastępstwo: Informatyka', text: 'Zajęcia odbędą się w sali 11.', lessonId: 'l3', type: 'replacement' },
   { id: 'reminder', title: 'Przypomnienie', text: 'Do poniedziałku oddaj projekt z biologii.', lessonId: '', type: 'reminder' },
 ];
+const classCodes = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((n) => ['A', 'B'].map((letter) => `${n}${letter}`));
+const classOptionsHtml = classCodes.map((c) => `<option value="${c}">${c}</option>`).join('');
+
+// Migrate the old single shared schedule (pre-per-class) into class 1A so existing data isn't lost.
+const legacyLessons = JSON.parse(localStorage.getItem('schoolLessons') || 'null');
+const storedLessonsByClass = JSON.parse(localStorage.getItem('schoolLessonsByClass') || 'null');
+const initialLessonsByClass = storedLessonsByClass || { '1A': legacyLessons || defaultLessons };
 
 const state = {
   subjects: JSON.parse(localStorage.getItem('schoolSubjects') || 'null') || defaultSubjects,
-  lessons: JSON.parse(localStorage.getItem('schoolLessons') || 'null') || defaultLessons,
+  lessonsByClass: initialLessonsByClass,
   announcements: JSON.parse(localStorage.getItem('schoolAnnouncements') || 'null') || defaultAnnouncements,
   activeSubject: null,
   mode: 'subject',
   editAnnouncement: null,
   editLesson: null,
+  lessonTargetClass: null,
   forceReplacement: false,
   chosenGradient: gradients[0],
   lessonColor: lessonColors[0],
 };
 
 const saveSubjects = () => localStorage.setItem('schoolSubjects', JSON.stringify(state.subjects));
-const saveLessons = () => localStorage.setItem('schoolLessons', JSON.stringify(state.lessons));
+const saveLessonsByClass = () => localStorage.setItem('schoolLessonsByClass', JSON.stringify(state.lessonsByClass));
 const saveAnnouncements = () => localStorage.setItem('schoolAnnouncements', JSON.stringify(state.announcements));
+const classLessons = (cls) => state.lessonsByClass[cls] || (state.lessonsByClass[cls] = []);
 
 const escapeHtml = (s) => s.replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
 const capitalize = (s) => (s ? `${s.charAt(0).toLocaleUpperCase('pl-PL')}${s.slice(1)}` : s);
@@ -120,7 +129,7 @@ function bindCards(el) {
       type === 'subject' ? renderSubjects() : renderCompetences();
     });
   });
-  el.querySelectorAll('[data-type]').forEach((b) => {
+  el.querySelectorAll('[data-id]').forEach((b) => {
     const open = () => {
       if (b.dataset.type === 'subject') {
         state.activeSubject = b.dataset.id;
@@ -187,7 +196,7 @@ function openEditor(mode, announcementId = null) {
   const typeField = document.querySelector('#announcementTypeField');
   lessonField.classList.toggle('hidden', !isAnnouncement || !isReplacement);
   typeField.classList.toggle('hidden', !isAnnouncement || isReplacement);
-  lessonSelect.innerHTML = '<option value="">Wybierz lekcję</option>' + state.lessons.map((x) => `<option value="${x.id}">${x.start} · ${escapeHtml(x.name)}</option>`).join('');
+  lessonSelect.innerHTML = '<option value="">Wybierz lekcję</option>' + classLessons(currentUser?.classroom).map((x) => `<option value="${x.id}">${x.start} · ${escapeHtml(x.name)}</option>`).join('');
   lessonSelect.value = existing?.lessonId || '';
   document.querySelector('#announcementType').value = existing?.type || 'event';
 
@@ -249,9 +258,10 @@ function renderLessonColors() {
   }));
 }
 
-function openLessonEditor(id = null) {
+function openLessonEditor(id = null, cls = currentUser?.classroom) {
   state.editLesson = id;
-  const item = id ? state.lessons.find((x) => x.id === id) : null;
+  state.lessonTargetClass = cls;
+  const item = id ? classLessons(cls).find((x) => x.id === id) : null;
   document.querySelector('#lessonModalTitle').textContent = item ? 'Edytuj lekcję' : 'Dodaj lekcję';
   document.querySelector('#lessonName').value = item?.name || '';
   document.querySelector('#lessonTeacher').value = item?.teacher || '';
@@ -274,13 +284,15 @@ lessonDialog.addEventListener('close', () => {
   const start = document.querySelector('#lessonStart').value;
   const end = document.querySelector('#lessonEnd').value;
   if (!name || !teacher || !start || !end || start >= end) return;
+  const lessons = classLessons(state.lessonTargetClass);
   if (state.editLesson) {
-    Object.assign(state.lessons.find((x) => x.id === state.editLesson), { name, teacher, room, start, end, color: state.lessonColor });
+    Object.assign(lessons.find((x) => x.id === state.editLesson), { name, teacher, room, start, end, color: state.lessonColor });
   } else {
-    state.lessons.push({ id: crypto.randomUUID(), name, teacher, room, start, end, color: state.lessonColor });
+    lessons.push({ id: crypto.randomUUID(), name, teacher, room, start, end, color: state.lessonColor });
   }
-  saveLessons();
-  renderSchedule();
+  saveLessonsByClass();
+  if (state.lessonTargetClass === currentUser?.classroom) renderSchedule();
+  if (document.querySelector('#adminClassSelect')?.value === state.lessonTargetClass) renderAdminLessonTable();
 });
 
 function renderSchedule() {
@@ -288,7 +300,7 @@ function renderSchedule() {
   const current = now.getHours() * 60 + now.getMinutes();
   const el = document.querySelector('#lessonList');
   document.querySelector('#todayDate').textContent = now.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
-  const lessons = [...state.lessons].sort((a, b) => a.start.localeCompare(b.start));
+  const lessons = [...classLessons(currentUser?.classroom)].sort((a, b) => a.start.localeCompare(b.start));
   el.innerHTML = lessons.length ? lessons.map((x) => {
     const replacement = state.announcements.find((a) => a.lessonId === x.id);
     const replacementName = replacement?.title.replace(/^Zastępstwo:\s*/i, '');
@@ -301,6 +313,44 @@ function renderSchedule() {
     </div>`;
   }).join('') : emptyState('Brak lekcji', 'Dodaj pierwszą lekcję do planu.');
   el.querySelectorAll('[data-edit-lesson]').forEach((b) => b.addEventListener('click', () => openLessonEditor(b.dataset.editLesson)));
+}
+
+// ---------- Admin: per-class lesson plan table ----------
+function renderAdminLessonTable() {
+  const select = document.querySelector('#adminClassSelect');
+  if (!select) return;
+  const cls = select.value;
+  const lessons = [...classLessons(cls)].sort((a, b) => a.start.localeCompare(b.start));
+  const el = document.querySelector('#adminLessonTable');
+  el.innerHTML = lessons.length ? `<div class="overflow-x-auto"><table class="w-full min-w-[560px] border-collapse text-left text-sm">
+    <thead><tr class="border-b border-line text-muted">
+      <th class="py-2 pr-3 font-semibold">Godz.</th>
+      <th class="py-2 pr-3 font-semibold">Przedmiot</th>
+      <th class="py-2 pr-3 font-semibold">Nauczyciel</th>
+      <th class="py-2 pr-3 font-semibold">Sala</th>
+      <th class="py-2 pr-3 font-semibold">Kolor</th>
+      <th class="py-2 pr-0 font-semibold text-right">Akcje</th>
+    </tr></thead>
+    <tbody>${lessons.map((x) => `<tr class="border-b border-line">
+      <td class="whitespace-nowrap py-2 pr-3">${x.start}–${x.end}</td>
+      <td class="py-2 pr-3 font-bold">${escapeHtml(x.name)}</td>
+      <td class="py-2 pr-3">${escapeHtml(x.teacher)}</td>
+      <td class="py-2 pr-3">${escapeHtml(x.room || '—')}</td>
+      <td class="py-2 pr-3"><span class="inline-block h-4 w-4 rounded-full align-middle" style="background:${x.color}"></span></td>
+      <td class="py-2 pr-0 text-right whitespace-nowrap">
+        <button class="rounded-lg bg-app px-2 py-1 font-bold text-primary" data-admin-edit-lesson="${x.id}">Edytuj</button>
+        <button class="ml-1 rounded-lg bg-app px-2 py-1 font-bold text-red-600" data-admin-delete-lesson="${x.id}">Usuń</button>
+      </td>
+    </tr>`).join('')}</tbody>
+  </table></div>` : emptyState('Brak lekcji', 'Ta klasa nie ma jeszcze planu lekcji.');
+  el.querySelectorAll('[data-admin-edit-lesson]').forEach((b) => b.addEventListener('click', () => openLessonEditor(b.dataset.adminEditLesson, cls)));
+  el.querySelectorAll('[data-admin-delete-lesson]').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Usunąć tę lekcję z planu klasy?')) return;
+    state.lessonsByClass[cls] = classLessons(cls).filter((x) => x.id !== b.dataset.adminDeleteLesson);
+    saveLessonsByClass();
+    renderAdminLessonTable();
+    if (cls === currentUser?.classroom) renderSchedule();
+  }));
 }
 
 // ---------- Announcements / replacements ----------
@@ -385,7 +435,7 @@ document.querySelectorAll('[data-pattern]').forEach((b) => {
 
 // ---------- Accounts / login ----------
 const classSelect = document.querySelector('#classroom');
-classSelect.innerHTML += [1, 2, 3, 4, 5, 6, 7, 8].flatMap((n) => ['A', 'B'].map((letter) => `<option value="${n}${letter}">${n}${letter}</option>`)).join('');
+classSelect.innerHTML += classOptionsHtml;
 let accounts = JSON.parse(localStorage.getItem('schoolAccounts') || '[]');
 let currentUser = JSON.parse(localStorage.getItem('schoolUser') || 'null');
 const normalise = (name) => name.trim().toLocaleLowerCase('pl-PL');
@@ -455,6 +505,12 @@ function setupUserInterface() {
       <p class="relative mt-1.5 text-white/85">Konta i uprawnienia</p>
     </button>`);
     renderAccounts();
+    const adminClassSelect = document.querySelector('#adminClassSelect');
+    adminClassSelect.innerHTML = classOptionsHtml;
+    adminClassSelect.value = currentUser?.classroom || classCodes[0];
+    adminClassSelect.addEventListener('change', renderAdminLessonTable);
+    document.querySelector('#addAdminLesson').addEventListener('click', () => openLessonEditor(null, adminClassSelect.value));
+    renderAdminLessonTable();
   }
   document.querySelector('#settingsPanel').insertAdjacentHTML('beforeend', `<button class="mt-[18px] rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" id="logoutButton">Wyloguj się</button>`);
   document.querySelector('#logoutButton').addEventListener('click', () => {
