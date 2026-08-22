@@ -1,4 +1,20 @@
 // Moja Szkoła — app logic
+import { firebaseConfig } from './firebase-config.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
+import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+
+// ---------- Cloud data store (Firestore) ----------
+// Shared data (accounts, lessons, subjects, announcements) lives in Firestore so every
+// browser/device sees the same thing. Each key below is one document in the "store"
+// collection, shaped as { value: <data> }. state.* / accounts stay the in-memory mirror
+// that the rest of the app already reads and mutates; save*() writes the mirror back to
+// Firestore, and onSnapshot() pushes updates made elsewhere back into this tab live.
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+const storeDoc = (name) => doc(db, 'store', name);
+
 const gradients = ['linear-gradient(135deg,#4f46e5,#8b5cf6)', 'linear-gradient(135deg,#0891b2,#22c55e)', 'linear-gradient(135deg,#ea580c,#f43f5e)', 'linear-gradient(135deg,#0f766e,#0ea5e9)', 'linear-gradient(135deg,#be123c,#a855f7)', 'linear-gradient(135deg,#ca8a04,#f97316)'];
 const lessonColors = ['#4f46e5', '#0891b2', '#7c3aed', '#dc2626', '#16a34a', '#ea580c'];
 
@@ -35,25 +51,25 @@ const gradeNumbers = [1, 2, 3, 4, 5, 6, 7, 8];
 const gradeOfClass = (cls) => cls.slice(0, -1);
 const gradeTabItems = gradeNumbers.map((n) => ({ code: String(n), label: `Klasa ${n}` }));
 
-// Migrate the old single shared schedule (pre-per-class) into class 1A so existing data isn't lost,
-// and backfill fields added later (addedBy / classroom / pending / date / time) for data saved by older versions.
+// One-time fallback seed used only if a document doesn't exist yet in Firestore (brand new
+// project, or migrating from an earlier localStorage-only version of this app on this browser).
+// Also backfills fields added later (addedBy / classroom / pending / date / time / day) so
+// data saved by older versions still normalizes correctly once it round-trips through Firestore.
 const legacyLessons = JSON.parse(localStorage.getItem('schoolLessons') || 'null');
-const storedLessonsByClass = JSON.parse(localStorage.getItem('schoolLessonsByClass') || 'null');
+const legacyLessonsByClass = JSON.parse(localStorage.getItem('schoolLessonsByClass') || 'null');
 const normalizeLessonsByClass = (byClass) => {
   const out = {};
   for (const [cls, lessons] of Object.entries(byClass || {})) out[cls] = (lessons || []).map((l) => ({ addedBy: 'admin', day: currentWeekday(), ...l }));
   return out;
 };
-const initialLessonsByClass = normalizeLessonsByClass(storedLessonsByClass || { '1A': legacyLessons || defaultLessons });
 
-const storedAnnouncements = JSON.parse(localStorage.getItem('schoolAnnouncements') || 'null');
+const legacyAnnouncements = JSON.parse(localStorage.getItem('schoolAnnouncements') || 'null');
 const normalizeAnnouncements = (list) => (list || []).map((a) => ({ classroom: a.lessonId ? '1A' : 'all', pending: false, date: '', time: '', createdBy: '', ...a }));
 
-// Subjects/competences are per class too; the old global list migrates into 1A.
-// Items also carry addedBy (admin-seeded vs student-added) so students can't
-// delete/extend what the admin's starter package put there.
+// Subjects/competences are per class too. Items also carry addedBy (admin-seeded vs
+// student-added) so students can't delete/extend what the admin's starter package put there.
 const legacySubjects = JSON.parse(localStorage.getItem('schoolSubjects') || 'null');
-const storedSubjectsByClass = JSON.parse(localStorage.getItem('schoolSubjectsByClass') || 'null');
+const legacySubjectsByClass = JSON.parse(localStorage.getItem('schoolSubjectsByClass') || 'null');
 const normalizeSubjectsByClass = (byClass) => {
   const out = {};
   for (const [cls, subjects] of Object.entries(byClass || {})) {
@@ -61,20 +77,28 @@ const normalizeSubjectsByClass = (byClass) => {
   }
   return out;
 };
-const initialSubjectsByClass = normalizeSubjectsByClass(storedSubjectsByClass || { '1A': legacySubjects || defaultSubjects });
 
 // Starter competence packages are per grade (1-8), ignoring the A/B/C section letter.
-const storedStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
+const legacyStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
 const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
-const initialStarterSubjectsByGrade = storedStarterByGrade || Object.fromEntries(
-  gradeNumbers.map((n) => [String(n), JSON.parse(JSON.stringify(legacyStarterSubjects || defaultSubjects))])
-);
+const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
+
+const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'accounts'];
+const seedValue = {
+  subjectsByClass: normalizeSubjectsByClass(legacySubjectsByClass || { '1A': legacySubjects || defaultSubjects }),
+  starterSubjectsByGrade: legacyStarterByGrade || Object.fromEntries(
+    gradeNumbers.map((n) => [String(n), JSON.parse(JSON.stringify(legacyStarterSubjects || defaultSubjects))])
+  ),
+  lessonsByClass: normalizeLessonsByClass(legacyLessonsByClass || { '1A': legacyLessons || defaultLessons }),
+  announcements: normalizeAnnouncements(legacyAnnouncements || defaultAnnouncements),
+  accounts: legacyAccounts || [],
+};
 
 const state = {
-  subjectsByClass: initialSubjectsByClass,
-  starterSubjectsByGrade: initialStarterSubjectsByGrade,
-  lessonsByClass: initialLessonsByClass,
-  announcements: normalizeAnnouncements(storedAnnouncements || defaultAnnouncements),
+  subjectsByClass: {},
+  starterSubjectsByGrade: {},
+  lessonsByClass: {},
+  announcements: [],
   activeSubject: null,
   activeTemplateSubject: null,
   mode: 'subject',
@@ -91,11 +115,60 @@ const state = {
   lessonColor: lessonColors[0],
 };
 
-const saveSubjectsByClass = () => localStorage.setItem('schoolSubjectsByClass', JSON.stringify(state.subjectsByClass));
-const saveStarterSubjectsByGrade = () => localStorage.setItem('schoolStarterSubjectsByGrade', JSON.stringify(state.starterSubjectsByGrade));
-const saveLessonsByClass = () => localStorage.setItem('schoolLessonsByClass', JSON.stringify(state.lessonsByClass));
-const saveAnnouncements = () => localStorage.setItem('schoolAnnouncements', JSON.stringify(state.announcements));
+const saveSubjectsByClass = () => setDoc(storeDoc('subjectsByClass'), { value: state.subjectsByClass });
+const saveStarterSubjectsByGrade = () => setDoc(storeDoc('starterSubjectsByGrade'), { value: state.starterSubjectsByGrade });
+const saveLessonsByClass = () => setDoc(storeDoc('lessonsByClass'), { value: state.lessonsByClass });
+const saveAnnouncements = () => setDoc(storeDoc('announcements'), { value: state.announcements });
+const saveAccounts = () => setDoc(storeDoc('accounts'), { value: accounts });
 const classLessons = (cls) => state.lessonsByClass[cls] || (state.lessonsByClass[cls] = []);
+
+function applyStoreValue(key, value) {
+  if (key === 'subjectsByClass') state.subjectsByClass = normalizeSubjectsByClass(value);
+  else if (key === 'starterSubjectsByGrade') state.starterSubjectsByGrade = value || {};
+  else if (key === 'lessonsByClass') state.lessonsByClass = normalizeLessonsByClass(value);
+  else if (key === 'announcements') state.announcements = normalizeAnnouncements(value);
+  else if (key === 'accounts') accounts = value || [];
+}
+
+function renderAfterStoreChange(key) {
+  if (key === 'subjectsByClass') {
+    renderSubjects();
+    if (!document.querySelector('#detail').classList.contains('hidden')) renderCompetences();
+  } else if (key === 'starterSubjectsByGrade') {
+    renderStarterSubjects();
+  } else if (key === 'lessonsByClass') {
+    renderSchedule();
+    renderAdminLessonTable();
+  } else if (key === 'announcements') {
+    renderAnnouncements();
+    renderPendingReplacements();
+    renderSchedule();
+  } else if (key === 'accounts') {
+    renderAccounts();
+  }
+}
+
+async function loadStore() {
+  await signInAnonymously(auth);
+  await Promise.all(STORE_KEYS.map(async (key) => {
+    const ref = storeDoc(key);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      applyStoreValue(key, snap.data().value);
+    } else {
+      applyStoreValue(key, seedValue[key]);
+      await setDoc(ref, { value: seedValue[key] });
+    }
+  }));
+}
+
+function watchStoreLive() {
+  STORE_KEYS.forEach((key) => onSnapshot(storeDoc(key), (snap) => {
+    if (!snap.exists()) return;
+    applyStoreValue(key, snap.data().value);
+    renderAfterStoreChange(key);
+  }));
+}
 const subjectsForClass = (cls) => state.subjectsByClass[cls] || (state.subjectsByClass[cls] = []);
 const starterSubjectsForGrade = (grade) => state.starterSubjectsByGrade[grade] || (state.starterSubjectsByGrade[grade] = []);
 
@@ -723,7 +796,7 @@ document.querySelectorAll('[data-pattern]').forEach((b) => {
 // ---------- Accounts / login ----------
 const classSelect = document.querySelector('#classroom');
 classSelect.innerHTML += classOptionsHtml;
-let accounts = JSON.parse(localStorage.getItem('schoolAccounts') || '[]');
+let accounts = [];
 let currentUser = JSON.parse(localStorage.getItem('schoolUser') || 'null');
 const normalise = (name) => name.trim().toLocaleLowerCase('pl-PL');
 const isAdmin = () => currentUser && (normalise(currentUser.name) === 'tpraglowski' || accounts.find((x) => normalise(x.name) === normalise(currentUser.name))?.admin);
@@ -746,7 +819,7 @@ document.querySelector('#registerForm').addEventListener('submit', (e) => {
   if (accounts.some((x) => normalise(x.name) === normalise(name))) return alert('Takie konto już istnieje.');
   const user = { name, classroom: classSelect.value, password: document.querySelector('#registerPassword').value, admin: normalise(name) === 'tpraglowski' };
   accounts.push(user);
-  localStorage.setItem('schoolAccounts', JSON.stringify(accounts));
+  saveAccounts();
   if (!subjectsForClass(user.classroom).length) seedClassSubjectsFromStarter(user.classroom);
   finishLogin(user);
 });
@@ -771,13 +844,13 @@ function renderAccounts() {
   el.querySelectorAll('[data-account]').forEach((b) => b.addEventListener('click', () => {
     const account = accounts.find((a) => normalise(a.name) === normalise(b.dataset.account));
     account.admin = !account.admin;
-    localStorage.setItem('schoolAccounts', JSON.stringify(accounts));
+    saveAccounts();
     renderAccounts();
   }));
   el.querySelectorAll('[data-remove-account]').forEach((b) => b.addEventListener('click', () => {
     if (normalise(b.dataset.removeAccount) === 'tpraglowski' || !confirm('Usunąć to konto?')) return;
     accounts = accounts.filter((a) => normalise(a.name) !== normalise(b.dataset.removeAccount));
-    localStorage.setItem('schoolAccounts', JSON.stringify(accounts));
+    saveAccounts();
     renderAccounts();
   }));
 }
@@ -818,13 +891,27 @@ function setupUserInterface() {
   });
 }
 
-if (currentUser) {
-  document.querySelector('#loginLayer').classList.add('hidden');
-  setupUserInterface();
-}
+async function boot() {
+  try {
+    await loadStore();
+  } catch (err) {
+    console.error('Nie udało się połączyć z bazą danych Firestore', err);
+    document.querySelector('#cloudLoadingText').textContent = 'Nie udało się połączyć z bazą danych. Sprawdź internet i konfigurację w firebase-config.js, po czym odśwież stronę.';
+    return;
+  }
+  watchStoreLive();
+  document.querySelector('#cloudLoading').classList.add('hidden');
+  document.querySelector('#loginLayer').classList.remove('hidden');
 
-renderSubjects();
-renderAnnouncements();
-renderSchedule();
-show('home');
-setInterval(renderSchedule, 60000);
+  if (currentUser) {
+    document.querySelector('#loginLayer').classList.add('hidden');
+    setupUserInterface();
+  }
+
+  renderSubjects();
+  renderAnnouncements();
+  renderSchedule();
+  show('home');
+  setInterval(renderSchedule, 60000);
+}
+boot();
