@@ -4,127 +4,308 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Moja Szkoła</title>
-  <style>
-    :root { --font-size: 16px; --bg: #f5f7ff; --ink: #17213c; --muted: #63708c; --card: #fff; --line: #e7eaf3; --primary: #4f46e5; --shadow: #24304f0a; }
-    body.dark { --bg: #111827; --ink: #f3f4f6; --muted: #a8b1c5; --card: #1f2937; --line: #374151; --shadow: #0000002e; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; color: var(--ink); background: var(--bg); font: var(--font-size)/1.45 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-    button, input, textarea, select { font: inherit; }
-    button { cursor: pointer; border: 0; }
-    .app { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 42px; }
-    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 28px; }
-    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 1.25em; letter-spacing: -.03em; }
-    .logo { display:grid; place-items:center; width:42px; height:42px; color:white; border-radius:14px; background:linear-gradient(135deg,#4f46e5,#8b5cf6); box-shadow:0 8px 18px #4f46e540; }
-    .nav { display:flex; padding:5px; gap:4px; background:var(--card); border:1px solid var(--line); border-radius:15px; box-shadow:0 4px 15px var(--shadow); }
-    .nav button { padding:9px 13px; color:var(--muted); background:transparent; border-radius:10px; font-weight:700; }
-    .nav button.active { color:#fff; background:var(--primary); }
-    .view { display:none; animation:appear .24s ease; }
-    .view.active { display:block; }
-    @keyframes appear { from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none} }
-    h1 { font-size:clamp(1.7em,4vw,2.5em); line-height:1.08; margin:0 0 7px; letter-spacing:-.045em; }
-    h2 { margin:0; font-size:1.2em; letter-spacing:-.025em; }
-    .subtitle { margin:0 0 25px; color:var(--muted); }
-    .home-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
-    .option-card, .subject-card { position:relative; min-height:220px; overflow:hidden; padding:27px; color:white; border-radius:25px; text-align:left; box-shadow:0 14px 30px #2b315326; transition:transform .2s,box-shadow .2s; }
-    .option-card:hover, .subject-card:hover { transform:translateY(-4px); box-shadow:0 20px 38px #2b315535; }
-    .option-card::after, .subject-card::after { content:""; position:absolute; width:220px; height:220px; border-radius:50%; background:#ffffff20; right:-75px; top:-78px; }
-    .option-card .icon { display:grid; place-items:center; width:52px; height:52px; border-radius:16px; background:#ffffff24; font-size:1.5em; }
-    .option-card h2 { margin-top:49px; font-size:1.55em; }
-    .option-card p { position:relative; z-index:1; margin:6px 0 0; color:#ffffffcf; }
-    .schedule { background:linear-gradient(135deg,#2563eb,#0ea5e9); }
-    .changes { background:linear-gradient(135deg,#e11d48,#f97316); }
-    .panel { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:22px; box-shadow:0 7px 22px var(--shadow); }
-    .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:17px; }
-    .back { color:var(--primary); background:#eef0ff; padding:9px 13px; border-radius:10px; font-weight:700; }
-    .lesson-list, .announcement-list { display:grid; gap:10px; }
-    .lesson { position:relative; display:grid; grid-template-columns:65px 1fr auto; align-items:center; border:1px solid var(--line); border-radius:15px; overflow:hidden; }.lesson.now{outline:3px solid #fbbf24;outline-offset:2px}.lesson.now::before{content:'TERAZ';position:absolute;z-index:2;left:0;right:0;top:0;border-top:3px solid #fbbf24;color:#92400e;background:#fef3c7;font-size:9px;font-weight:900;letter-spacing:.08em;text-align:right;padding-right:7px;line-height:15px}.replacement-tag{display:inline-block;margin-top:5px;padding:3px 7px;border-radius:7px;background:#fef3c7;color:#92400e;font-size:.78em;font-weight:800}.lesson-edit{margin-right:11px;padding:7px 9px;border-radius:8px;background:var(--bg);color:var(--primary);font-weight:800}
-    .time { align-self:stretch; display:grid; place-items:center; color:#fff; background:var(--primary); font-weight:800; font-size:.9em; }
-    .lesson-info { padding:13px 15px; }.lesson-info b{display:block}.lesson-info span{color:var(--muted);font-size:.9em}
-    .announce { position:relative; border-left:5px solid #f59e0b; padding:14px 48px 14px 15px; background:#fffbeb; border-radius:0 12px 12px 0; }.announce b{display:block}.announce span{color:#795f25;font-size:.9em}.announce .edit-item{position:absolute;right:10px;top:12px;background:#ffffffb5;color:#795f25;border-radius:8px;padding:6px 8px;font-weight:800}
-    .competence-head { display:flex; justify-content:space-between; align-items:flex-start; gap:18px; margin-bottom:25px; }
-    .primary { color:white; background:var(--primary); padding:11px 15px; border-radius:12px; font-weight:800; box-shadow:0 7px 15px #4f46e536; }.primary:hover{filter:brightness(.95)}
-    .subject-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:17px; }
-    .subject-card { min-height:172px; padding:20px; cursor:pointer; }.subject-card h2{margin-top:55px;font-size:1.3em}.subject-card p{margin:3px 0;color:#ffffffd9;font-size:.9em}.subject-card .dots{position:absolute;right:13px;bottom:13px;background:#ffffff25;color:white;border-radius:9px;padding:5px 9px;font-weight:900}
-    .empty { grid-column:1/-1; padding:45px 20px; text-align:center; color:var(--muted); border:2px dashed var(--line); border-radius:20px; }.empty strong{display:block;color:var(--ink);font-size:1.1em;margin-bottom:5px}
-    .setting { display:grid; grid-template-columns:1fr auto; align-items:center; gap:20px; padding:18px 0; border-bottom:1px solid var(--line); }.setting:last-child{border:0}.setting p{margin:4px 0 0;color:var(--muted);font-size:.9em}.color-options,.mode-options{display:flex;gap:8px}.color-choice{width:30px;height:30px;border:2px solid transparent;border-radius:50%;padding:0}.color-choice.selected{outline:2px solid var(--ink);outline-offset:2px}.mode-choice{padding:8px 11px;border-radius:9px;color:var(--muted);background:var(--bg);border:1px solid var(--line);font-weight:700}.mode-choice.selected{color:white;background:var(--primary);border-color:var(--primary)}.range{accent-color:var(--primary);width:min(200px,38vw)}.background-preview{display:flex;gap:9px;flex-wrap:wrap}.bg-style{width:49px;height:34px;border:1px solid var(--line);border-radius:10px;padding:0;background-color:var(--bg)}.bg-style.selected{outline:2px solid var(--ink);outline-offset:2px}.smile-bg{background-image:radial-gradient(circle at 15px 15px,#ffd54f 0 10px,transparent 11px),radial-gradient(circle at 38px 30px,#ffd54f 0 9px,transparent 10px)}.heart-bg{background-image:radial-gradient(circle at 12px 13px,#f9a8d4 0 9px,transparent 10px),radial-gradient(circle at 33px 26px,#f9a8d4 0 10px,transparent 11px)}.star-bg{background-image:radial-gradient(circle at 15px 15px,#a7f3d0 0 7px,transparent 8px),radial-gradient(circle at 37px 28px,#a7f3d0 0 9px,transparent 10px)}
-    body.pattern-smile{background-image:radial-gradient(circle at 25px 25px,#facc1542 0 12px,transparent 13px),radial-gradient(circle at 85px 75px,#facc154238 0 10px,transparent 11px);background-size:120px 120px}body.pattern-heart{background-image:radial-gradient(circle at 22px 22px,#f472b630 0 11px,transparent 12px),radial-gradient(circle at 80px 80px,#f472b626 0 9px,transparent 10px);background-size:120px 120px}body.pattern-star{background-image:radial-gradient(circle at 22px 22px,#34d39935 0 9px,transparent 10px),radial-gradient(circle at 80px 80px,#34d3992b 0 11px,transparent 12px);background-size:120px 120px}
-    body.pattern-smile{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Ccircle cx='48' cy='48' r='25' fill='%23facc15' fill-opacity='.72'/%3E%3Ccircle cx='39' cy='42' r='3' fill='%236b4f00'/%3E%3Ccircle cx='57' cy='42' r='3' fill='%236b4f00'/%3E%3Cpath d='M36 53 Q48 66 60 53' fill='none' stroke='%236b4f00' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");background-size:96px 96px}
-    body.pattern-panda{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Ccircle cx='31' cy='30' r='12' fill='%23334155'/%3E%3Ccircle cx='65' cy='30' r='12' fill='%23334155'/%3E%3Ccircle cx='48' cy='50' r='28' fill='%23f8fafc' stroke='%2394a3b8' stroke-width='2'/%3E%3Cellipse cx='38' cy='47' rx='9' ry='11' fill='%23334155'/%3E%3Cellipse cx='58' cy='47' rx='9' ry='11' fill='%23334155'/%3E%3Ccircle cx='39' cy='48' r='3' fill='white'/%3E%3Ccircle cx='57' cy='48' r='3' fill='white'/%3E%3Ccircle cx='48' cy='59' r='4' fill='%23334155'/%3E%3C/svg%3E");background-size:96px 96px}
-    dialog { width:min(460px,calc(100% - 28px)); color:var(--ink); background:var(--card); border:0; border-radius:23px; padding:0; box-shadow:0 25px 60px #10172c55; }dialog::backdrop{background:#17213c80}.modal{padding:24px}.modal h2{font-size:1.35em;margin-bottom:18px}.field{display:grid;gap:7px;margin:14px 0}.field label{font-weight:750;font-size:.93em}.field input{border:1px solid #dce1ee;border-radius:11px;padding:11px 12px;outline-color:var(--primary);background:var(--bg);color:var(--ink)}.gradient-picker{display:flex;gap:9px;flex-wrap:wrap}.gradient-choice{width:43px;height:32px;border:0;border-radius:9px;outline-offset:3px}.gradient-choice.selected{outline:2px solid var(--ink)}.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:21px}.cancel{padding:10px 14px;border-radius:10px;color:var(--muted);background:var(--bg);font-weight:700}
-    .crumb{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:.9em;margin-bottom:14px}.competence-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:15px}.competence-card{min-height:130px}.competence-card h2{margin-top:40px;font-size:1.12em}.delete{position:absolute;top:11px;right:11px;color:#fff;background:#00000045;border-radius:8px;padding:4px 8px;opacity:.9;transition:opacity .2s}.subject-card:hover .delete{opacity:1}.hidden{display:none!important}
-    .field select{border:1px solid #dce1ee;border-radius:11px;padding:11px 12px;background:var(--bg);color:var(--ink)}.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.hidden{display:none!important}.setting{transition:max-height .35s ease,opacity .25s ease,padding .35s ease,transform .35s ease;max-height:160px;overflow:hidden}.setting.slide-away{max-height:0;opacity:0;padding-top:0;padding-bottom:0;transform:translateY(-10px);border-color:transparent}.status-card{cursor:pointer}.status-badge{display:inline-block;margin-top:8px;padding:4px 8px;border-radius:8px;background:#ffffff3b;color:#fff;font-size:.78em;font-weight:800}.event-card{min-height:145px}.event-card h2{margin-top:36px}.event-card p{color:#1f2937}.event-card.blue,.event-card.event{background:#dbeafe;color:#1e3a8a}.event-card.green,.event-card.reminder{background:#dcfce7;color:#14532d}.event-card.yellow,.event-card.other{background:#fef3c7;color:#713f12}.event-card .delete{color:#17213c;background:#ffffffa8}.announce,.announce b{color:#795f25}.login-layer{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:18px;background:#111827a8;backdrop-filter:blur(7px)}.login-box{width:min(420px,100%);background:var(--card);color:var(--ink);border-radius:24px;padding:28px;box-shadow:0 20px 60px #0008}.login-box h1{margin-bottom:8px}.login-box .primary{width:100%;margin-top:8px}.login-layer.hidden{display:none!important}
-    @media(max-width:650px){.app{width:min(100% - 24px,1120px);padding-top:17px}.topbar{align-items:flex-start}.nav{gap:1px}.nav button{padding:8px;font-size:.78em}.home-grid{grid-template-columns:1fr}.competence-head{align-items:stretch;flex-direction:column}.primary{align-self:flex-start}.setting{grid-template-columns:1fr}.option-card{min-height:185px}.option-card h2{margin-top:33px}.field-row{grid-template-columns:1fr}}
-  </style>
-</head>
-<body>
-  <main class="app">
-    <header class="topbar"><div class="brand"><span class="logo">✦</span>MY SCHOOL</div><nav class="nav" aria-label="Menu"><button class="active" data-view="home" onclick="show('home')">Główne</button><button data-view="competences" onclick="show('competences')">Kompetencje</button><button data-view="settings" onclick="show('settings')">Ustawienia</button></nav></header>
-    <section class="view active" id="home"><h1>Dzień dobry!</h1><p class="subtitle">Wybierz, co chcesz teraz sprawdzić.</p><div class="home-grid"><button class="option-card schedule" data-open="schedule" onclick="show('schedule')"><span class="icon">▦</span><h2>Plan lekcji</h2><p>Zobacz dzisiejsze zajęcia</p></button><button class="option-card changes" data-open="changes" onclick="show('changes')"><span class="icon">↔</span><h2>Zastępstwa</h2><p>Sprawdź zmiany w lekcjach</p></button><button class="option-card" style="background:linear-gradient(135deg,#7c3aed,#db2777)" data-open="events" onclick="show('events')"><span class="icon">★</span><h2>Wydarzenia</h2><p>Ogłoszenia i szkolne plakaty</p></button></div></section>
-    <section class="view" id="schedule"><button class="back" data-view="home">← Wróć</button><div style="height:18px"></div><div class="panel"><div class="section-head"><div><h2>Plan lekcji · dzisiaj</h2><span style="color:var(--muted)" id="todayDate"></span></div><button class="primary" id="addLesson">+ Dodaj lekcję</button></div><div class="lesson-list" id="lessonList"></div></div></section>
-    <section class="view" id="changes"><button class="back" data-view="home">← Wróć</button><div style="height:18px"></div><div class="panel"><div class="section-head"><h2>Zastępstwa</h2><button class="primary" id="addReplacement">+ Dodaj zastępstwo</button></div><div class="announcement-list" id="replacementList"></div></div></section><section class="view" id="events"><button class="back" data-view="home">← Wróć</button><div style="height:18px"></div><div class="panel"><div class="section-head"><h2>Wydarzenia i ogłoszenia</h2><button class="primary" id="addAnnouncement">+ Dodaj ogłoszenie</button></div><div class="subject-grid" id="announcementList"></div></div></section>
-    <section class="view" id="competences"><div class="competence-head"><div><h1>Kompetencje</h1><p class="subtitle">Twórz przedmioty, a w nich swoje kompetencje.</p></div><button class="primary" id="addSubject">+ Dodaj przedmiot</button></div><div class="subject-grid" id="subjectGrid"></div></section>
-    <section class="view" id="detail"><div class="crumb"><button class="back" data-view="competences">← Przedmioty</button><span id="crumbName"></span></div><div class="competence-head"><div><h1 id="detailTitle">Przedmiot</h1><p class="subtitle">Twoje kompetencje w tym przedmiocie.</p></div><button class="primary" id="addCompetence">+ Dodaj kompetencję</button></div><div class="competence-grid" id="competenceGrid"></div></section>
-    <section class="view" id="settings"><h1>Ustawienia</h1><p class="subtitle">Dopasuj wygląd aplikacji do siebie.</p><div class="panel"><div class="setting"><div><h2>Wielkość tekstu</h2><p>Zmienia rozmiar tekstu w całej aplikacji.</p></div><input class="range" id="fontSize" type="range" min="14" max="21" value="16" aria-label="Wielkość tekstu" /></div><div class="setting"><div><h2>Tryb wyglądu</h2><p>Wybierz tryb jasny lub ciemny.</p></div><div class="mode-options"><button class="mode-choice" data-mode="light">☀ Jasny</button><button class="mode-choice" data-mode="dark">☾ Ciemny</button></div></div><div class="setting"><div><h2>Kolor tła</h2><p>Wybierz kolor tła aplikacji.</p></div><div class="color-options" id="backgrounds"><button class="color-choice selected" style="background:#f5f7ff" data-bg="#f5f7ff" aria-label="Jasnoniebieskie tło"></button><button class="color-choice" style="background:#fff7ed" data-bg="#fff7ed" aria-label="Kremowe tło"></button><button class="color-choice" style="background:#f0fdf4" data-bg="#f0fdf4" aria-label="Zielone tło"></button><button class="color-choice" style="background:#fdf2f8" data-bg="#fdf2f8" aria-label="Różowe tło"></button></div></div><div class="setting"><div><h2>Tło z uśmieszkami</h2><p>Dodaj delikatny wzór do wybranego tła.</p></div><div class="background-preview"><button class="bg-style selected" data-pattern="none" aria-label="Bez wzoru"></button><button class="bg-style smile-bg" data-pattern="smile" aria-label="Żółte uśmiechy"></button><button class="bg-style heart-bg" data-pattern="heart" aria-label="Różowe serca"></button><button class="bg-style star-bg" data-pattern="star" aria-label="Zielone gwiazdki"></button></div></div></div></section>
-    <section class="view" id="admin"><button class="back" data-view="home">← Wróć</button><div style="height:18px"></div><div class="panel"><div class="section-head"><h2>Panel administratora</h2><span style="color:var(--muted)">Konta bez haseł</span></div><div class="announcement-list" id="accountList"></div></div></section>
-  </main>
-  <dialog id="editor"><form class="modal" method="dialog"><h2 id="modalTitle">Dodaj przedmiot</h2><div class="field"><label for="itemName" id="nameLabel">Nazwa przedmiotu</label><input id="itemName" required maxlength="45" placeholder="np. Matematyka" /></div><div class="field" id="gradientField"><label>Kolor gradientu</label><div class="gradient-picker" id="gradientPicker"></div></div><div class="field" id="descriptionField" hidden><label for="itemDescription">Treść ogłoszenia</label><input id="itemDescription" maxlength="160" placeholder="Wpisz treść informacji" /></div><div class="modal-actions"><button type="button" id="cancelEditor" class="cancel">Anuluj</button><button value="save" class="primary">Zapisz</button></div></form></dialog>
-  <dialog id="lessonEditor"><form class="modal" method="dialog"><h2 id="lessonModalTitle">Dodaj lekcję</h2><div class="field"><label for="lessonName">Nazwa lekcji</label><input id="lessonName" required maxlength="45" placeholder="np. Matematyka" /></div><div class="field-row"><div class="field"><label for="lessonTeacher">Inicjały nauczyciela</label><input id="lessonTeacher" required maxlength="8" placeholder="np. AN" /></div><div class="field"><label for="lessonRoom">Sala</label><input id="lessonRoom" maxlength="12" placeholder="np. 24" /></div></div><div class="field-row"><div class="field"><label for="lessonStart">Godzina rozpoczęcia</label><input id="lessonStart" type="time" required /></div><div class="field"><label for="lessonEnd">Godzina zakończenia</label><input id="lessonEnd" type="time" required /></div></div><div class="field"><label>Kolor lekcji</label><div class="gradient-picker" id="lessonColorPicker"></div></div><div class="modal-actions"><button type="button" id="cancelLesson" class="cancel">Anuluj</button><button value="save" class="primary">Zapisz lekcję</button></div></form></dialog>
-  <dialog id="statusEditor"><form class="modal" method="dialog"><h2 id="statusTitle">Status kompetencji</h2><div class="field"><label for="statusSelect">Wybierz status</label><select id="statusSelect"><option value="locked">Nieodblokowane</option><option value="unlocked">Odblokowane — zdobądź mnie!</option><option value="known">Umiem</option><option value="earned">Zdobyta 👍</option></select></div><div class="modal-actions"><button type="button" id="cancelStatus" class="cancel">Anuluj</button><button value="save" class="primary">Zapisz status</button></div></form></dialog>
-  <div class="login-layer" id="loginLayer"><section class="login-box" id="startScreen"><div class="logo" style="margin-bottom:18px">✦</div><h1>MY SCHOOL</h1><p class="subtitle">Twoje miejsce do nauki, planu i kompetencji.</p><button class="primary" id="openLogin">Zaloguj się</button><button class="cancel" id="openRegister" style="width:100%;margin-top:10px">Utwórz konto</button></section><form class="login-box hidden" id="loginForm"><h1>Zaloguj się</h1><p class="subtitle">Wpisz dane swojego konta.</p><div class="field"><label for="username">Nazwa użytkownika</label><input id="username" name="username" autocomplete="username" required maxlength="30" placeholder="np. Ola123" /></div><div class="field"><label for="password">Hasło</label><input id="password" name="password" type="password" autocomplete="current-password" required minlength="3" placeholder="Twoje hasło" /></div><button class="primary" type="submit">Zaloguj się</button><button type="button" class="cancel" data-start style="width:100%;margin-top:10px">Wróć</button></form><form class="login-box hidden" id="registerForm"><h1>Utwórz konto</h1><p class="subtitle">Wybierz klasę tylko podczas tworzenia konta.</p><div class="field"><label for="registerUsername">Nazwa użytkownika</label><input id="registerUsername" name="username" autocomplete="username" required maxlength="30" /></div><div class="field"><label for="registerPassword">Hasło</label><input id="registerPassword" name="new-password" type="password" autocomplete="new-password" required minlength="3" /></div><div class="field"><label for="classroom">Klasa</label><select id="classroom" required><option value="" selected disabled>Wybierz klasę</option></select></div><button class="primary" type="submit">Utwórz konto</button><button type="button" class="cancel" data-start style="width:100%;margin-top:10px">Wróć</button></form></div>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    const gradients=['linear-gradient(135deg,#4f46e5,#8b5cf6)','linear-gradient(135deg,#0891b2,#22c55e)','linear-gradient(135deg,#ea580c,#f43f5e)','linear-gradient(135deg,#0f766e,#0ea5e9)','linear-gradient(135deg,#be123c,#a855f7)','linear-gradient(135deg,#ca8a04,#f97316)'];
-    const defaultSubjects=[{id:'math',name:'Matematyka',gradient:gradients[0],competences:[{id:'algebra',name:'Algebra',gradient:gradients[4]},{id:'geometry',name:'Geometria',gradient:gradients[1]}]},{id:'polish',name:'Język polski',gradient:gradients[2],competences:[{id:'reading',name:'Czytanie ze zrozumieniem',gradient:gradients[3]}]}];
-    const lessonTimes=[['08:00','08:45'],['09:00','09:45'],['10:00','10:45'],['10:55','11:40'],['11:50','12:35'],['12:55','13:40'],['13:50','14:35']];
-    const defaultLessons=[{id:'l1',name:'Matematyka',teacher:'AN',room:'24',start:'08:00',end:'08:45',color:'#4f46e5'},{id:'l2',name:'Język polski',teacher:'PK',room:'12',start:'09:00',end:'09:45',color:'#0891b2'},{id:'l3',name:'Informatyka',teacher:'MW',room:'8',start:'10:00',end:'10:45',color:'#7c3aed'}];
-    const defaultAnnouncements=[{id:'room-change',title:'Zastępstwo: Informatyka',text:'Zajęcia odbędą się w sali 11.',lessonId:'l3'},{id:'reminder',title:'Przypomnienie',text:'Do poniedziałku oddaj projekt z biologii.',lessonId:''}];
-    const state={subjects:JSON.parse(localStorage.getItem('schoolSubjects')||'null')||defaultSubjects,lessons:JSON.parse(localStorage.getItem('schoolLessons')||'null')||defaultLessons,announcements:JSON.parse(localStorage.getItem('schoolAnnouncements')||'null')||defaultAnnouncements,activeSubject:null,mode:'subject',editAnnouncement:null,editLesson:null,chosenGradient:gradients[0],lessonColor:'#4f46e5'};
-    const save=()=>localStorage.setItem('schoolSubjects',JSON.stringify(state.subjects));
-    const show=(id)=>{document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===id));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===id));window.scrollTo({top:0,behavior:'smooth'});};window.show=show;
-    document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
-    document.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.open)));
-    const statusInfo={locked:{label:'Nieodblokowane',color:'linear-gradient(135deg,#64748b,#475569)'},unlocked:{label:'⚠ Zdobądź mnie!',color:'linear-gradient(135deg,#f97316,#ef4444)'},known:{label:'Umiem',color:'linear-gradient(135deg,#2563eb,#06b6d4)'},earned:{label:'Zdobyta 👍',color:'linear-gradient(135deg,#16a34a,#22c55e)'}};
-    function card(item,type){const status=statusInfo[item.status||'locked'];const style=type==='competence'?status.color:item.gradient;return `<article class="subject-card ${type==='competence'?'competence-card status-card':''}" style="background:${style}" data-id="${item.id}" data-type="${type}" tabindex="0" role="button"><button class="delete" title="Usuń" data-delete="${item.id}" data-type="${type}">Usuń</button><h2>${escapeHtml(item.name)}</h2><p>${type==='subject'?`Kompetencje: ${item.competences.length}`:`<span class="status-badge">${status.label}</span>`}</p></article>`}
-    const escapeHtml=s=>s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-    const capitalize=s=>s?`${s.charAt(0).toLocaleUpperCase('pl-PL')}${s.slice(1)}`:s;
-    function renderSubjects(){const el=document.querySelector('#subjectGrid');el.innerHTML=state.subjects.length?state.subjects.map(x=>card(x,'subject')).join(''):`<div class="empty"><strong>Nie masz jeszcze przedmiotów</strong>Dodaj pierwszy przedmiot, aby zacząć.</div>`;bindCards(el)}
-    function renderCompetences(){const subject=state.subjects.find(x=>x.id===state.activeSubject);if(!subject)return show('competences');document.querySelector('#detailTitle').textContent=subject.name;document.querySelector('#crumbName').textContent=subject.name;const el=document.querySelector('#competenceGrid');el.innerHTML=subject.competences.length?subject.competences.map(x=>card(x,'competence')).join(''):`<div class="empty"><strong>Brak kompetencji</strong>Dodaj pierwszą kompetencję dla tego przedmiotu.</div>`;bindCards(el)}
-    function renderAnnouncements(){const el=document.querySelector('#announcementList');el.innerHTML=state.announcements.length?state.announcements.map(x=>`<div class="announce"><b>${escapeHtml(x.title)}</b><span>${escapeHtml(x.text)}</span><button class="edit-item" data-edit-announcement="${x.id}" aria-label="Edytuj ogłoszenie">✎</button></div>`).join(''):`<div class="empty"><strong>Brak ogłoszeń</strong>Dodaj nowe zastępstwo lub ogłoszenie.</div>`;el.querySelectorAll('[data-edit-announcement]').forEach(b=>b.addEventListener('click',()=>openEditor('announcement',b.dataset.editAnnouncement)))}
-    const minutes=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
-    function renderSchedule(){const now=new Date(),current=now.getHours()*60+now.getMinutes(),el=document.querySelector('#lessonList');document.querySelector('#todayDate').textContent=now.toLocaleDateString('pl-PL',{day:'numeric',month:'long'});const lessons=[...state.lessons].sort((a,b)=>a.start.localeCompare(b.start));el.innerHTML=lessons.length?lessons.map(x=>{const replacement=state.announcements.find(a=>a.lessonId===x.id);return `<div class="lesson ${current>=minutes(x.start)&&current<=minutes(x.end)?'now':''}"><div class="time" style="background:${x.color}">${x.start}<br><small>${x.end}</small></div><div class="lesson-info"><b>${escapeHtml(x.name)}</b><span>sala ${escapeHtml(x.room||'—')} · ${escapeHtml(x.teacher)}</span>${replacement?`<span class="replacement-tag">Zastępstwo: ${escapeHtml(replacement.title)}</span>`:''}</div><button class="lesson-edit" data-edit-lesson="${x.id}" aria-label="Edytuj lekcję">✎</button></div>`}).join(''):`<div class="empty"><strong>Brak lekcji</strong>Dodaj pierwszą lekcję do planu.</div>`;el.querySelectorAll('[data-edit-lesson]').forEach(b=>b.addEventListener('click',()=>openLessonEditor(b.dataset.editLesson)))}
-    function bindCards(el){el.querySelectorAll('[data-delete]').forEach(b=>{const remove=e=>{e.preventDefault();e.stopPropagation();const id=b.dataset.delete,type=b.dataset.type;if(!confirm('Czy na pewno chcesz usunąć tę pozycję?'))return;if(type==='subject')state.subjects=state.subjects.filter(x=>x.id!==id);else{const subject=state.subjects.find(x=>x.id===state.activeSubject);subject.competences=subject.competences.filter(x=>x.id!==id)}save();type==='subject'?renderSubjects():renderCompetences()};b.addEventListener('pointerdown',e=>e.stopPropagation());b.addEventListener('click',remove)});el.querySelectorAll('.subject-card').forEach(b=>{const open=()=>{if(b.dataset.type==='subject'){state.activeSubject=b.dataset.id;renderCompetences();show('detail')}else openStatusEditor(b.dataset.id)};b.addEventListener('click',open);b.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}})})}
-    const statusDialog=document.querySelector('#statusEditor');let activeCompetence=null;
-    function openStatusEditor(id){activeCompetence=state.subjects.find(x=>x.id===state.activeSubject).competences.find(x=>x.id===id);document.querySelector('#statusTitle').textContent=activeCompetence.name;document.querySelector('#statusSelect').value=activeCompetence.status||'locked';statusDialog.showModal()}
-    document.querySelector('#cancelStatus').addEventListener('click',()=>statusDialog.close('cancel'));
-    statusDialog.addEventListener('close',()=>{if(statusDialog.returnValue==='save'&&activeCompetence){activeCompetence.status=document.querySelector('#statusSelect').value;save();renderCompetences()}});
-    const dialog=document.querySelector('#editor');
-    function openEditor(mode,announcementId=null){state.mode=mode;state.editAnnouncement=announcementId;const isAnnouncement=mode==='announcement';const existing=isAnnouncement&&announcementId?state.announcements.find(x=>x.id===announcementId):null;state.chosenGradient=gradients[(state.subjects.length+(mode==='competence'?1:0))%gradients.length];document.querySelector('#modalTitle').textContent=isAnnouncement?(existing?'Edytuj ogłoszenie':'Dodaj ogłoszenie'):mode==='subject'?'Dodaj przedmiot':'Dodaj kompetencję';document.querySelector('#nameLabel').textContent=isAnnouncement?'Tytuł ogłoszenia':mode==='subject'?'Nazwa przedmiotu':'Nazwa kompetencji';document.querySelector('#itemName').placeholder=isAnnouncement?'np. Zastępstwo z matematyki':mode==='subject'?'np. Matematyka':'np. Rozwiązywanie równań';document.querySelector('#itemName').value=existing?existing.title:'';document.querySelector('#itemDescription').value=existing?existing.text:'';document.querySelector('#descriptionField').hidden=!isAnnouncement;document.querySelector('#itemDescription').required=isAnnouncement;document.querySelector('#gradientField').hidden=isAnnouncement;renderPicker();dialog.showModal();setTimeout(()=>document.querySelector('#itemName').focus(),50)}
-    function ensureLessonSelect(){if(document.querySelector('#announcementLesson'))return;document.querySelector('#descriptionField').insertAdjacentHTML('afterend','<div class="field" id="announcementLessonField"><label for="announcementLesson">Lekcja, której dotyczy zastępstwo</label><select id="announcementLesson"><option value="">Wybierz lekcję</option></select></div><div class="field" id="announcementTypeField"><label for="announcementType">Rodzaj ogłoszenia</label><select id="announcementType"><option value="event">Wydarzenie</option><option value="reminder">Przypomnienie</option><option value="other">Inne</option></select></div>')}
-    function openEditor(mode,announcementId=null){state.mode=mode;state.editAnnouncement=announcementId;const isAnnouncement=mode==='announcement';const existing=isAnnouncement&&announcementId?state.announcements.find(x=>x.id===announcementId):null;state.chosenGradient=gradients[(state.subjects.length+(mode==='competence'?1:0))%gradients.length];document.querySelector('#modalTitle').textContent=isAnnouncement?(existing?'Edytuj ogłoszenie':'Dodaj ogłoszenie'):mode==='subject'?'Dodaj przedmiot':'Dodaj kompetencję';document.querySelector('#nameLabel').textContent=isAnnouncement?'Tytuł ogłoszenia':mode==='subject'?'Nazwa przedmiotu':'Nazwa kompetencji';document.querySelector('#itemName').placeholder=isAnnouncement?'np. Zastępstwo z matematyki':mode==='subject'?'np. Matematyka':'np. Rozwiązywanie równań';document.querySelector('#itemName').value=existing?existing.title:'';document.querySelector('#itemDescription').value=existing?existing.text:'';document.querySelector('#descriptionField').hidden=!isAnnouncement;document.querySelector('#itemDescription').required=isAnnouncement;document.querySelector('#gradientField').hidden=isAnnouncement;ensureLessonSelect();const lessonField=document.querySelector('#announcementLessonField'),lessonSelect=document.querySelector('#announcementLesson');lessonField.hidden=!isAnnouncement;lessonSelect.innerHTML='<option value="">To zwykłe ogłoszenie</option>'+state.lessons.map(x=>`<option value="${x.id}">${escapeHtml(x.start)} · ${escapeHtml(x.name)}</option>`).join('');lessonSelect.value=existing?.lessonId||'';renderPicker();dialog.showModal();setTimeout(()=>document.querySelector('#itemName').focus(),50)}
-    function renderPicker(){document.querySelector('#gradientPicker').innerHTML=gradients.map((g,i)=>`<button type="button" class="gradient-choice ${g===state.chosenGradient?'selected':''}" style="background:${g}" data-gradient="${i}" aria-label="Gradient ${i+1}"></button>`).join('');document.querySelectorAll('[data-gradient]').forEach(b=>b.addEventListener('click',()=>{state.chosenGradient=gradients[b.dataset.gradient];renderPicker()}))}
-    function openEditor(mode,announcementId=null){state.mode=mode;state.editAnnouncement=announcementId;const isAnnouncement=mode==='announcement';const existing=isAnnouncement&&announcementId?state.announcements.find(x=>x.id===announcementId):null;const isReplacement=state.forceReplacement||existing?.lessonId;state.chosenGradient=gradients[state.subjects.length%gradients.length];document.querySelector('#modalTitle').textContent=isAnnouncement?(existing?'Edytuj wpis':'Dodaj wpis'):mode==='subject'?'Dodaj przedmiot':'Dodaj kompetencję';document.querySelector('#nameLabel').textContent=isAnnouncement?(isReplacement?'Nazwa zastępstwa':'Tytuł ogłoszenia'):mode==='subject'?'Nazwa przedmiotu':'Nazwa kompetencji';document.querySelector('#itemName').placeholder=isAnnouncement?(isReplacement?'np. Informatyka — pani Nowak':'np. Kiermasz szkolny'):mode==='subject'?'np. Matematyka':'np. Rozwiązywanie równań';document.querySelector('#itemName').value=existing?existing.title:'';document.querySelector('#itemDescription').value=existing?existing.text:'';document.querySelector('#descriptionField').hidden=!isAnnouncement;document.querySelector('#itemDescription').required=isAnnouncement;document.querySelector('#gradientField').hidden=isAnnouncement;ensureLessonSelect();const lessonField=document.querySelector('#announcementLessonField'),lessonSelect=document.querySelector('#announcementLesson'),typeField=document.querySelector('#announcementTypeField');lessonField.hidden=!isAnnouncement||!isReplacement;typeField.hidden=!isAnnouncement||isReplacement;lessonSelect.innerHTML='<option value="">Wybierz lekcję</option>'+state.lessons.map(x=>`<option value="${x.id}">${x.start} · ${escapeHtml(x.name)}</option>`).join('');lessonSelect.value=existing?.lessonId||'';document.querySelector('#announcementType').value=existing?.type||'event';renderPicker();dialog.showModal();setTimeout(()=>document.querySelector('#itemName').focus(),50)}
-    document.querySelector('#addSubject').addEventListener('click',()=>openEditor('subject'));document.querySelector('#addCompetence').addEventListener('click',()=>openEditor('competence'));document.querySelector('#addAnnouncement').addEventListener('click',()=>openEditor('announcement'));document.querySelector('#cancelEditor').addEventListener('click',()=>dialog.close('cancel'));
-    document.querySelectorAll('#itemName,#lessonName').forEach(input=>input.addEventListener('input',()=>{if(input.value)input.value=capitalize(input.value)}));
-    const lessonDialog=document.querySelector('#lessonEditor');
-    function renderLessonColors(){document.querySelector('#lessonColorPicker').innerHTML=['#4f46e5','#0891b2','#7c3aed','#dc2626','#16a34a','#ea580c'].map(c=>`<button type="button" class="gradient-choice ${c===state.lessonColor?'selected':''}" style="background:${c}" data-lesson-color="${c}"></button>`).join('');document.querySelectorAll('[data-lesson-color]').forEach(b=>b.addEventListener('click',()=>{state.lessonColor=b.dataset.lessonColor;renderLessonColors()}))}
-    function openLessonEditor(id=null){state.editLesson=id;const item=id?state.lessons.find(x=>x.id===id):null;document.querySelector('#lessonModalTitle').textContent=item?'Edytuj lekcję':'Dodaj lekcję';document.querySelector('#lessonName').value=item?.name||'';document.querySelector('#lessonTeacher').value=item?.teacher||'';document.querySelector('#lessonRoom').value=item?.room||'';document.querySelector('#lessonStart').value=item?.start||'08:00';document.querySelector('#lessonEnd').value=item?.end||'08:45';state.lessonColor=item?.color||'#4f46e5';renderLessonColors();lessonDialog.showModal();setTimeout(()=>document.querySelector('#lessonName').focus(),50)}
-    document.querySelector('#addLesson').addEventListener('click',()=>openLessonEditor());document.querySelector('#cancelLesson').addEventListener('click',()=>lessonDialog.close('cancel'));
-    lessonDialog.addEventListener('close',()=>{if(lessonDialog.returnValue!=='save')return;const name=document.querySelector('#lessonName').value.trim(),teacher=document.querySelector('#lessonTeacher').value.trim(),room=document.querySelector('#lessonRoom').value.trim(),start=document.querySelector('#lessonStart').value,end=document.querySelector('#lessonEnd').value;if(!name||!teacher||!start||!end||start>=end)return;if(state.editLesson){Object.assign(state.lessons.find(x=>x.id===state.editLesson),{name,teacher,room,start,end,color:state.lessonColor})}else state.lessons.push({id:crypto.randomUUID(),name,teacher,room,start,end,color:state.lessonColor});localStorage.setItem('schoolLessons',JSON.stringify(state.lessons));renderSchedule()});
-    dialog.addEventListener('close',()=>{if(dialog.returnValue!=='save')return;const name=document.querySelector('#itemName').value.trim();if(!name)return;if(state.mode==='announcement'){const text=document.querySelector('#itemDescription').value.trim(),lessonId=document.querySelector('#announcementLesson')?.value||'';if(!text)return;if(state.editAnnouncement){const item=state.announcements.find(x=>x.id===state.editAnnouncement);item.title=name;item.text=text;item.lessonId=lessonId}else state.announcements.push({id:crypto.randomUUID(),title:name,text,lessonId});localStorage.setItem('schoolAnnouncements',JSON.stringify(state.announcements));renderAnnouncements();renderSchedule();return}const item={id:crypto.randomUUID(),name,gradient:state.chosenGradient};if(state.mode==='subject'){item.competences=[];state.subjects.push(item);save();renderSubjects()}else{state.subjects.find(x=>x.id===state.activeSubject).competences.push(item);save();renderCompetences()}});
-    const fontSize=document.querySelector('#fontSize'), storedFont=localStorage.getItem('schoolFontSize');fontSize.value=storedFont||16;document.documentElement.style.setProperty('--font-size',fontSize.value+'px');fontSize.addEventListener('input',()=>{document.documentElement.style.setProperty('--font-size',fontSize.value+'px');localStorage.setItem('schoolFontSize',fontSize.value)});
-    const storedBg=localStorage.getItem('schoolBg')||'#f5f7ff';document.documentElement.style.setProperty('--bg',storedBg);document.querySelectorAll('.color-choice').forEach(b=>{b.classList.toggle('selected',b.dataset.bg===storedBg);b.addEventListener('click',()=>{document.documentElement.style.setProperty('--bg',b.dataset.bg);localStorage.setItem('schoolBg',b.dataset.bg);document.querySelectorAll('.color-choice').forEach(x=>x.classList.toggle('selected',x===b))})});
-    const storedMode=localStorage.getItem('schoolMode')||'light';document.body.classList.toggle('dark',storedMode==='dark');document.querySelectorAll('[data-mode]').forEach(b=>{b.classList.toggle('selected',b.dataset.mode===storedMode);b.addEventListener('click',()=>{document.body.classList.toggle('dark',b.dataset.mode==='dark');localStorage.setItem('schoolMode',b.dataset.mode);document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('selected',x===b))})});
-    const colourSetting=document.querySelector('#backgrounds').closest('.setting');const updateColourVisibility=()=>colourSetting.classList.toggle('slide-away',document.body.classList.contains('dark'));updateColourVisibility();document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',updateColourVisibility));
-    document.querySelector('.background-preview').insertAdjacentHTML('beforeend','<button class="bg-style" style="background:#e2e8f0" data-pattern="panda" aria-label="Małe pandy">🐼</button>');
-    const storedPattern=localStorage.getItem('schoolPattern')||'none';document.body.classList.toggle('pattern-'+storedPattern,storedPattern!=='none');document.querySelectorAll('[data-pattern]').forEach(b=>{b.classList.toggle('selected',b.dataset.pattern===storedPattern);b.addEventListener('click',()=>{document.body.classList.remove('pattern-smile','pattern-heart','pattern-star','pattern-panda');if(b.dataset.pattern!=='none')document.body.classList.add('pattern-'+b.dataset.pattern);localStorage.setItem('schoolPattern',b.dataset.pattern);document.querySelectorAll('[data-pattern]').forEach(x=>x.classList.toggle('selected',x===b))})});
-    document.querySelector('#addReplacement').addEventListener('click',()=>{state.forceReplacement=true;openEditor('announcement')});document.querySelector('[data-open="events"]').addEventListener('click',()=>state.forceReplacement=false);
-    function renderSchedule(){const now=new Date(),current=now.getHours()*60+now.getMinutes(),el=document.querySelector('#lessonList');document.querySelector('#todayDate').textContent=now.toLocaleDateString('pl-PL',{day:'numeric',month:'long'});const lessons=[...state.lessons].sort((a,b)=>a.start.localeCompare(b.start));el.innerHTML=lessons.length?lessons.map((x,index)=>{const replacement=state.announcements.find(a=>a.lessonId===x.id),replacementName=replacement?.title.replace(/^Zastępstwo:\s*/i,'');return `<div class="lesson ${current>=minutes(x.start)&&current<=minutes(x.end)?'now':''}"><div class="time" style="background:${x.color}">${x.start}<br><small>${x.end}</small></div><div class="lesson-info"><b>Lekcja ${index} · ${escapeHtml(x.name)}</b><span>sala ${escapeHtml(x.room||'—')} · ${escapeHtml(x.teacher)}</span>${replacement?`<span class="replacement-tag">Zastępstwo za: ${escapeHtml(replacementName)}</span>`:''}</div><button class="lesson-edit" data-edit-lesson="${x.id}">✎</button></div>`}).join(''):`<div class="empty"><strong>Brak lekcji</strong>Dodaj pierwszą lekcję do planu.</div>`;el.querySelectorAll('[data-edit-lesson]').forEach(b=>b.addEventListener('click',()=>openLessonEditor(b.dataset.editLesson)))}
-    function renderAnnouncements(){const events=state.announcements.filter(x=>!x.lessonId),replacements=state.announcements.filter(x=>x.lessonId);const eventEl=document.querySelector('#announcementList'),replacementEl=document.querySelector('#replacementList');eventEl.innerHTML=events.length?events.map(x=>`<article class="subject-card event-card ${x.type||'yellow'}" data-edit-announcement="${x.id}"><h2>${escapeHtml(x.title)}</h2><p>${escapeHtml(x.text)}</p></article>`).join(''):`<div class="empty"><strong>Brak ogłoszeń</strong>Dodaj pierwszy szkolny plakat.</div>`;replacementEl.innerHTML=replacements.length?replacements.map(x=>`<div class="announce"><b>${escapeHtml(x.title)}</b><span>${escapeHtml(x.text)}</span><button class="edit-item" data-edit-announcement="${x.id}">✎</button></div>`).join(''):`<div class="empty"><strong>Brak zastępstw</strong>Wszystkie lekcje odbywają się zgodnie z planem.</div>`;document.querySelectorAll('[data-edit-announcement]').forEach(b=>b.addEventListener('click',()=>{state.forceReplacement=!!state.announcements.find(x=>x.id===b.dataset.editAnnouncement).lessonId;openEditor('announcement',b.dataset.editAnnouncement)}))}
-    dialog.addEventListener('close',()=>{if(dialog.returnValue!=='save'||state.mode!=='announcement')return;const item=state.editAnnouncement?state.announcements.find(x=>x.id===state.editAnnouncement):state.announcements.at(-1);if(item){item.type=state.forceReplacement?'replacement':document.querySelector('#announcementType').value;localStorage.setItem('schoolAnnouncements',JSON.stringify(state.announcements));renderAnnouncements();renderSchedule()}});
-    const classSelect=document.querySelector('#classroom');classSelect.innerHTML+=[1,2,3,4,5,6,7,8].flatMap(n=>['A','B'].map(letter=>`<option value="${n}${letter}">${n}${letter}</option>`)).join('');let accounts=JSON.parse(localStorage.getItem('schoolAccounts')||'[]'),currentUser=JSON.parse(localStorage.getItem('schoolUser')||'null');const normalise=name=>name.trim().toLocaleLowerCase('pl-PL');const isAdmin=()=>currentUser&&(normalise(currentUser.name)==='tpraglowski'||accounts.find(x=>normalise(x.name)===normalise(currentUser.name))?.admin);const screen=id=>document.querySelectorAll('#loginLayer .login-box').forEach(x=>x.classList.toggle('hidden',x.id!==id));document.querySelector('#openLogin').addEventListener('click',()=>screen('loginForm'));document.querySelector('#openRegister').addEventListener('click',()=>screen('registerForm'));document.querySelectorAll('[data-start]').forEach(b=>b.addEventListener('click',()=>screen('startScreen')));function finishLogin(user){currentUser={name:user.name,classroom:user.classroom};localStorage.setItem('schoolUser',JSON.stringify(currentUser));document.querySelector('#loginLayer').classList.add('hidden');setupUserInterface()}document.querySelector('#registerForm').addEventListener('submit',e=>{e.preventDefault();const name=capitalize(document.querySelector('#registerUsername').value.trim());if(accounts.some(x=>normalise(x.name)===normalise(name)))return alert('Takie konto już istnieje.');const user={name,classroom:classSelect.value,password:document.querySelector('#registerPassword').value,admin:normalise(name)==='tpraglowski'};accounts.push(user);localStorage.setItem('schoolAccounts',JSON.stringify(accounts));finishLogin(user)});document.querySelector('#loginForm').addEventListener('submit',e=>{e.preventDefault();const user=accounts.find(x=>normalise(x.name)===normalise(document.querySelector('#username').value)&&x.password===document.querySelector('#password').value);if(!user)return alert('Nieprawidłowa nazwa użytkownika lub hasło.');finishLogin(user)});
-    function renderAccounts(){const el=document.querySelector('#accountList');el.innerHTML=accounts.length?accounts.map(a=>`<div class="announce"><b>${escapeHtml(a.name)} · klasa ${a.classroom}</b><span>${a.admin?'Administrator':'Uczeń'}</span><button class="edit-item" data-account="${escapeHtml(a.name)}">Zmień dostęp</button><button class="edit-item" style="right:112px" data-remove-account="${escapeHtml(a.name)}">Usuń</button></div>`).join(''):`<div class="empty">Brak kont.</div>`;el.querySelectorAll('[data-account]').forEach(b=>b.addEventListener('click',()=>{const account=accounts.find(a=>normalise(a.name)===normalise(b.dataset.account));account.admin=!account.admin;localStorage.setItem('schoolAccounts',JSON.stringify(accounts));renderAccounts()}));el.querySelectorAll('[data-remove-account]').forEach(b=>b.addEventListener('click',()=>{if(normalise(b.dataset.removeAccount)==='tpraglowski'||!confirm('Usunąć to konto?'))return;accounts=accounts.filter(a=>normalise(a.name)!==normalise(b.dataset.removeAccount));localStorage.setItem('schoolAccounts',JSON.stringify(accounts));renderAccounts()}))}
-    function setupUserInterface(){document.querySelector('#homeAdmin')?.remove();document.querySelector('#logoutButton')?.remove();if(isAdmin()){document.querySelector('.home-grid').insertAdjacentHTML('beforeend','<button class="option-card" id="homeAdmin" style="background:linear-gradient(135deg,#0f172a,#475569)" onclick="show(\'admin\')"><span class="icon">⚙</span><h2>Panel administratora</h2><p>Konta i uprawnienia</p></button>');renderAccounts()}document.querySelector('#settings .panel').insertAdjacentHTML('beforeend','<button class="cancel" id="logoutButton" style="margin-top:18px">Wyloguj się</button>');document.querySelector('#logoutButton').addEventListener('click',()=>{localStorage.removeItem('schoolUser');currentUser=null;document.querySelector('#loginLayer').classList.remove('hidden');screen('startScreen');show('home')})}
-    if(currentUser){document.querySelector('#loginLayer').classList.add('hidden');setupUserInterface()}
-    renderSubjects();renderAnnouncements();renderSchedule();setInterval(renderSchedule,60000);
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            app: 'var(--bg)',
+            ink: 'var(--ink)',
+            muted: 'var(--muted)',
+            card: 'var(--card)',
+            line: 'var(--line)',
+            primary: 'var(--primary)',
+          },
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
+          },
+        },
+      },
+    };
   </script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="min-h-screen bg-app font-sans text-ink transition-colors">
+  <main class="mx-auto w-[calc(100%-2rem)] max-w-[1120px] pb-11 pt-7">
+    <header class="mb-7 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3 text-xl font-extrabold tracking-tight">
+        <span class="grid h-[42px] w-[42px] place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-500 text-white shadow-[0_8px_18px_#4f46e540]">✦</span>
+        MY SCHOOL
+      </div>
+      <nav class="flex gap-1 rounded-2xl border border-line bg-card p-1 shadow-[0_4px_15px_var(--shadow)]" id="mainNav" aria-label="Menu">
+        <button class="rounded-[10px] bg-primary px-3 py-2 font-bold text-white" data-view="home">Główne</button>
+        <button class="rounded-[10px] px-3 py-2 font-bold text-muted" data-view="competences">Kompetencje</button>
+        <button class="rounded-[10px] px-3 py-2 font-bold text-muted" data-view="settings">Ustawienia</button>
+      </nav>
+    </header>
+
+    <section class="view" id="home">
+      <h1 class="mb-1.5 text-[clamp(1.7em,4vw,2.5em)] font-extrabold leading-[1.08] tracking-tight">Dzień dobry!</h1>
+      <p class="mb-6 text-muted">Wybierz, co chcesz teraz sprawdzić.</p>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2" id="homeGrid">
+        <button class="group relative min-h-[220px] overflow-hidden rounded-[25px] p-7 text-left text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" style="background:linear-gradient(135deg,#2563eb,#0ea5e9)" data-open="schedule">
+          <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
+          <span class="relative grid h-[52px] w-[52px] place-items-center rounded-2xl bg-white/15 text-2xl">▦</span>
+          <h2 class="relative mt-12 text-[1.55em] font-bold tracking-tight">Plan lekcji</h2>
+          <p class="relative mt-1.5 text-white/85">Zobacz dzisiejsze zajęcia</p>
+        </button>
+        <button class="group relative min-h-[220px] overflow-hidden rounded-[25px] p-7 text-left text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" style="background:linear-gradient(135deg,#e11d48,#f97316)" data-open="changes">
+          <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
+          <span class="relative grid h-[52px] w-[52px] place-items-center rounded-2xl bg-white/15 text-2xl">↔</span>
+          <h2 class="relative mt-12 text-[1.55em] font-bold tracking-tight">Zastępstwa</h2>
+          <p class="relative mt-1.5 text-white/85">Sprawdź zmiany w lekcjach</p>
+        </button>
+        <button class="group relative min-h-[220px] overflow-hidden rounded-[25px] p-7 text-left text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" style="background:linear-gradient(135deg,#7c3aed,#db2777)" data-open="events">
+          <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
+          <span class="relative grid h-[52px] w-[52px] place-items-center rounded-2xl bg-white/15 text-2xl">★</span>
+          <h2 class="relative mt-12 text-[1.55em] font-bold tracking-tight">Wydarzenia</h2>
+          <p class="relative mt-1.5 text-white/85">Ogłoszenia i szkolne plakaty</p>
+        </button>
+      </div>
+    </section>
+
+    <section class="view hidden" id="schedule">
+      <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="home">← Wróć</button>
+      <div class="h-[18px]"></div>
+      <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
+        <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3">
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Plan lekcji · dzisiaj</h2><span class="text-muted" id="todayDate"></span></div>
+          <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addLesson">+ Dodaj lekcję</button>
+        </div>
+        <div class="grid gap-2.5" id="lessonList"></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="changes">
+      <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="home">← Wróć</button>
+      <div class="h-[18px]"></div>
+      <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
+        <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-[1.2em] font-bold tracking-tight">Zastępstwa</h2>
+          <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addReplacement">+ Dodaj zastępstwo</button>
+        </div>
+        <div class="grid gap-2.5" id="replacementList"></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="events">
+      <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="home">← Wróć</button>
+      <div class="h-[18px]"></div>
+      <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
+        <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-[1.2em] font-bold tracking-tight">Wydarzenia i ogłoszenia</h2>
+          <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addAnnouncement">+ Dodaj ogłoszenie</button>
+        </div>
+        <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-[17px]" id="announcementList"></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="competences">
+      <div class="mb-6 flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-start">
+        <div><h1 class="text-[clamp(1.7em,4vw,2.5em)] font-extrabold tracking-tight">Kompetencje</h1><p class="mt-1.5 text-muted">Twórz przedmioty, a w nich swoje kompetencje.</p></div>
+        <button class="self-start rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addSubject">+ Dodaj przedmiot</button>
+      </div>
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-[17px]" id="subjectGrid"></div>
+    </section>
+
+    <section class="view hidden" id="detail">
+      <div class="mb-3.5 flex items-center gap-2 text-sm text-muted">
+        <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="competences">← Przedmioty</button>
+        <span id="crumbName"></span>
+      </div>
+      <div class="mb-6 flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-start">
+        <div><h1 class="text-[clamp(1.7em,4vw,2.5em)] font-extrabold tracking-tight" id="detailTitle">Przedmiot</h1><p class="mt-1.5 text-muted">Twoje kompetencje w tym przedmiocie.</p></div>
+        <button class="self-start rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addCompetence">+ Dodaj kompetencję</button>
+      </div>
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-[15px]" id="competenceGrid"></div>
+    </section>
+
+    <section class="view hidden" id="settings">
+      <h1 class="text-[clamp(1.7em,4vw,2.5em)] font-extrabold tracking-tight">Ustawienia</h1>
+      <p class="mb-6 mt-1.5 text-muted">Dopasuj wygląd aplikacji do siebie.</p>
+      <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" id="settingsPanel">
+        <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Wielkość tekstu</h2><p class="mt-1 text-sm text-muted">Zmienia rozmiar tekstu w całej aplikacji.</p></div>
+          <input class="w-[min(200px,38vw)] accent-primary" id="fontSize" type="range" min="14" max="21" value="16" aria-label="Wielkość tekstu" />
+        </div>
+        <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Tryb wyglądu</h2><p class="mt-1 text-sm text-muted">Wybierz tryb jasny lub ciemny.</p></div>
+          <div class="flex gap-2">
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="light">☀ Jasny</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="dark">☾ Ciemny</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]" data-setting>
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Kolor tła</h2><p class="mt-1 text-sm text-muted">Wybierz kolor tła aplikacji.</p></div>
+          <div class="flex gap-2" id="backgrounds">
+            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#f5f7ff" data-bg="#f5f7ff" aria-label="Jasnoniebieskie tło"></button>
+            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#fff7ed" data-bg="#fff7ed" aria-label="Kremowe tło"></button>
+            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#f0fdf4" data-bg="#f0fdf4" aria-label="Zielone tło"></button>
+            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#fdf2f8" data-bg="#fdf2f8" aria-label="Różowe tło"></button>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 items-center gap-5 py-[18px] sm:grid-cols-[1fr_auto]">
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Tło z uśmieszkami</h2><p class="mt-1 text-sm text-muted">Dodaj delikatny wzór do wybranego tła.</p></div>
+          <div class="flex flex-wrap gap-2">
+            <button class="h-[34px] w-[49px] rounded-[10px] border border-line bg-app p-0" data-pattern="none" aria-label="Bez wzoru"></button>
+            <button class="smile-bg h-[34px] w-[49px] rounded-[10px] border border-line p-0" data-pattern="smile" aria-label="Żółte uśmiechy"></button>
+            <button class="heart-bg h-[34px] w-[49px] rounded-[10px] border border-line p-0" data-pattern="heart" aria-label="Różowe serca"></button>
+            <button class="star-bg h-[34px] w-[49px] rounded-[10px] border border-line p-0" data-pattern="star" aria-label="Zielone gwiazdki"></button>
+            <button class="h-[34px] w-[49px] rounded-[10px] border border-line bg-[#e2e8f0] p-0" data-pattern="panda" aria-label="Małe pandy">🐼</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="admin">
+      <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="home">← Wróć</button>
+      <div class="h-[18px]"></div>
+      <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
+        <div class="mb-[17px] flex items-center justify-between gap-3">
+          <h2 class="text-[1.2em] font-bold tracking-tight">Panel administratora</h2>
+          <span class="text-muted">Konta bez haseł</span>
+        </div>
+        <div class="grid gap-2.5" id="accountList"></div>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="w-[min(460px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="editor">
+    <form class="p-6" method="dialog">
+      <h2 class="mb-[18px] text-[1.35em] font-bold" id="modalTitle">Dodaj przedmiot</h2>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="itemName" id="nameLabel">Nazwa przedmiotu</label>
+        <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="itemName" required maxlength="45" placeholder="np. Matematyka" />
+      </div>
+      <div class="my-[14px] grid gap-[7px]" id="gradientField">
+        <label class="text-[.93em] font-bold">Kolor gradientu</label>
+        <div class="flex flex-wrap gap-[9px]" id="gradientPicker"></div>
+      </div>
+      <div class="my-[14px] hidden grid gap-[7px]" id="descriptionField">
+        <label class="text-[.93em] font-bold" for="itemDescription">Treść ogłoszenia</label>
+        <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="itemDescription" maxlength="160" placeholder="Wpisz treść informacji" />
+      </div>
+      <div class="my-[14px] hidden grid gap-[7px]" id="announcementLessonField">
+        <label class="text-[.93em] font-bold" for="announcementLesson">Lekcja, której dotyczy zastępstwo</label>
+        <select class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="announcementLesson"></select>
+      </div>
+      <div class="my-[14px] hidden grid gap-[7px]" id="announcementTypeField">
+        <label class="text-[.93em] font-bold" for="announcementType">Rodzaj ogłoszenia</label>
+        <select class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="announcementType">
+          <option value="event">Wydarzenie</option>
+          <option value="reminder">Przypomnienie</option>
+          <option value="other">Inne</option>
+        </select>
+      </div>
+      <div class="mt-[21px] flex justify-end gap-[9px]">
+        <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelEditor">Anuluj</button>
+        <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" value="save">Zapisz</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="w-[min(460px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="lessonEditor">
+    <form class="p-6" method="dialog">
+      <h2 class="mb-[18px] text-[1.35em] font-bold" id="lessonModalTitle">Dodaj lekcję</h2>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="lessonName">Nazwa lekcji</label>
+        <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="lessonName" required maxlength="45" placeholder="np. Matematyka" />
+      </div>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div class="my-[14px] grid gap-[7px]">
+          <label class="text-[.93em] font-bold" for="lessonTeacher">Inicjały nauczyciela</label>
+          <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="lessonTeacher" required maxlength="8" placeholder="np. AN" />
+        </div>
+        <div class="my-[14px] grid gap-[7px]">
+          <label class="text-[.93em] font-bold" for="lessonRoom">Sala</label>
+          <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="lessonRoom" maxlength="12" placeholder="np. 24" />
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div class="my-[14px] grid gap-[7px]">
+          <label class="text-[.93em] font-bold" for="lessonStart">Godzina rozpoczęcia</label>
+          <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="lessonStart" type="time" required />
+        </div>
+        <div class="my-[14px] grid gap-[7px]">
+          <label class="text-[.93em] font-bold" for="lessonEnd">Godzina zakończenia</label>
+          <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="lessonEnd" type="time" required />
+        </div>
+      </div>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold">Kolor lekcji</label>
+        <div class="flex flex-wrap gap-[9px]" id="lessonColorPicker"></div>
+      </div>
+      <div class="mt-[21px] flex justify-end gap-[9px]">
+        <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelLesson">Anuluj</button>
+        <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" value="save">Zapisz lekcję</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="w-[min(460px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="statusEditor">
+    <form class="p-6" method="dialog">
+      <h2 class="mb-[18px] text-[1.35em] font-bold" id="statusTitle">Status kompetencji</h2>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="statusSelect">Wybierz status</label>
+        <select class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="statusSelect">
+          <option value="locked">Nieodblokowane</option>
+          <option value="unlocked">Odblokowane — zdobądź mnie!</option>
+          <option value="known">Umiem</option>
+          <option value="earned">Zdobyta 👍</option>
+        </select>
+      </div>
+      <div class="mt-[21px] flex justify-end gap-[9px]">
+        <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelStatus">Anuluj</button>
+        <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" value="save">Zapisz status</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="fixed inset-0 z-10 grid place-items-center bg-[#111827a8] p-[18px] backdrop-blur-[7px]" id="loginLayer">
+    <section class="w-[min(420px,100%)] rounded-[24px] bg-card p-7 text-ink shadow-[0_20px_60px_#0008]" id="startScreen">
+      <div class="mb-[18px] grid h-[42px] w-[42px] place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-500 text-white shadow-[0_8px_18px_#4f46e540]">✦</div>
+      <h1 class="text-[clamp(1.7em,4vw,2.5em)] font-extrabold tracking-tight">MY SCHOOL</h1>
+      <p class="mb-6 mt-1.5 text-muted">Twoje miejsce do nauki, planu i kompetencji.</p>
+      <button class="w-full rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="openLogin">Zaloguj się</button>
+      <button class="mt-2.5 w-full rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" id="openRegister">Utwórz konto</button>
+    </section>
+    <form class="hidden w-[min(420px,100%)] rounded-[24px] bg-card p-7 text-ink shadow-[0_20px_60px_#0008]" id="loginForm">
+      <h1 class="text-[clamp(1.7em,4vw,2.5em)] font-extrabold tracking-tight">Zaloguj się</h1>
+      <p class="mb-6 mt-1.5 text-muted">Wpisz dane swojego konta.</p>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="username">Nazwa użytkownika</label>
+        <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="username" name="username" autocomplete="username" required maxlength="30" placeholder="np. Ola123" />
+      </div>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="password">Hasło</label>
+        <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="password" name="password" type="password" autocomplete="current-password" required minlength="3" placeholder="Twoje hasło" />
+      </div>
+      <button class="w-full rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" type="submit">Zaloguj się</button>
+      <button class="mt-2.5 w-full rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" data-start>Wróć</button>
+    </form>
+    <form class="hidden w-[min(420px,100%)] rounded-[24px] bg-card p-7 text-ink shadow-[0_20px_60px_#0008]" id="registerForm">
+      <h1 class="text-[clamp(1.7em,4vw,2.5em)] font-extrabold tracking-tight">Utwórz konto</h1>
+      <p class="mb-6 mt-1.5 text-muted">Wybierz klasę tylko podczas tworzenia konta.</p>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="registerUsername">Nazwa użytkownika</label>
+        <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="registerUsername" name="username" autocomplete="username" required maxlength="30" />
+      </div>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="registerPassword">Hasło</label>
+        <input class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="registerPassword" name="new-password" type="password" autocomplete="new-password" required minlength="3" />
+      </div>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="classroom">Klasa</label>
+        <select class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="classroom" required>
+          <option value="" selected disabled>Wybierz klasę</option>
+        </select>
+      </div>
+      <button class="w-full rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" type="submit">Utwórz konto</button>
+      <button class="mt-2.5 w-full rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" data-start>Wróć</button>
+    </form>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
