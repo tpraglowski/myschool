@@ -6,10 +6,22 @@ const defaultSubjects = [
   { id: 'math', name: 'Matematyka', gradient: gradients[0], competences: [{ id: 'algebra', name: 'Algebra', gradient: gradients[4] }, { id: 'geometry', name: 'Geometria', gradient: gradients[1] }] },
   { id: 'polish', name: 'Język polski', gradient: gradients[2], competences: [{ id: 'reading', name: 'Czytanie ze zrozumieniem', gradient: gradients[3] }] },
 ];
+const weekdays = [
+  { code: 'mon', label: 'Poniedziałek' },
+  { code: 'tue', label: 'Wtorek' },
+  { code: 'wed', label: 'Środa' },
+  { code: 'thu', label: 'Czwartek' },
+  { code: 'fri', label: 'Piątek' },
+];
+const weekdayLabel = (code) => weekdays.find((d) => d.code === code)?.label || code;
+const weekdayOptionsHtml = weekdays.map((d) => `<option value="${d.code}">${d.label}</option>`).join('');
+function currentWeekday() {
+  return weekdays[new Date().getDay() - 1]?.code || 'mon';
+}
 const defaultLessons = [
-  { id: 'l1', name: 'Matematyka', teacher: 'AN', room: '24', start: '08:00', end: '08:45', color: '#4f46e5' },
-  { id: 'l2', name: 'Język polski', teacher: 'PK', room: '12', start: '09:00', end: '09:45', color: '#0891b2' },
-  { id: 'l3', name: 'Informatyka', teacher: 'MW', room: '8', start: '10:00', end: '10:45', color: '#7c3aed' },
+  { id: 'l1', name: 'Matematyka', teacher: 'AN', room: '24', start: '08:00', end: '08:45', color: '#4f46e5', day: 'mon' },
+  { id: 'l2', name: 'Język polski', teacher: 'PK', room: '12', start: '09:00', end: '09:45', color: '#0891b2', day: 'mon' },
+  { id: 'l3', name: 'Informatyka', teacher: 'MW', room: '8', start: '10:00', end: '10:45', color: '#7c3aed', day: 'mon' },
 ];
 const defaultAnnouncements = [
   { id: 'room-change', title: 'Zastępstwo: Informatyka', text: 'Zajęcia odbędą się w sali 11.', lessonId: 'l3', type: 'replacement', classroom: '1A', pending: false, date: '', time: '' },
@@ -26,7 +38,7 @@ const legacyLessons = JSON.parse(localStorage.getItem('schoolLessons') || 'null'
 const storedLessonsByClass = JSON.parse(localStorage.getItem('schoolLessonsByClass') || 'null');
 const normalizeLessonsByClass = (byClass) => {
   const out = {};
-  for (const [cls, lessons] of Object.entries(byClass || {})) out[cls] = (lessons || []).map((l) => ({ addedBy: 'admin', ...l }));
+  for (const [cls, lessons] of Object.entries(byClass || {})) out[cls] = (lessons || []).map((l) => ({ addedBy: 'admin', day: currentWeekday(), ...l }));
   return out;
 };
 const initialLessonsByClass = normalizeLessonsByClass(storedLessonsByClass || { '1A': legacyLessons || defaultLessons });
@@ -43,6 +55,8 @@ const state = {
   editAnnouncement: null,
   editLesson: null,
   lessonTargetClass: null,
+  scheduleDay: currentWeekday(),
+  adminScheduleDay: currentWeekday(),
   forceReplacement: false,
   isReplacementEditing: false,
   chosenGradient: gradients[0],
@@ -189,7 +203,9 @@ function renderPicker() {
 function refreshReplacementLessonOptions(cls) {
   const lessonSelect = document.querySelector('#announcementLesson');
   const previousValue = lessonSelect.value;
-  lessonSelect.innerHTML = '<option value="">Wybierz lekcję</option>' + classLessons(cls).map((x) => `<option value="${x.id}">${x.start} · ${escapeHtml(x.name)}</option>`).join('');
+  const dayIndex = (code) => weekdays.findIndex((d) => d.code === code);
+  const sorted = [...classLessons(cls)].sort((a, b) => dayIndex(a.day) - dayIndex(b.day) || a.start.localeCompare(b.start));
+  lessonSelect.innerHTML = '<option value="">Wybierz lekcję</option>' + sorted.map((x) => `<option value="${x.id}">${weekdayLabel(x.day)} ${x.start} · ${escapeHtml(x.name)}</option>`).join('');
   if ([...lessonSelect.options].some((o) => o.value === previousValue)) lessonSelect.value = previousValue;
 }
 document.querySelector('#announcementClassroom').addEventListener('change', (e) => {
@@ -311,12 +327,14 @@ function renderLessonColors() {
   }));
 }
 
-function openLessonEditor(id = null, cls = currentUser?.classroom) {
+function openLessonEditor(id = null, cls = currentUser?.classroom, day = state.scheduleDay) {
   state.editLesson = id;
   state.lessonTargetClass = cls;
   const item = id ? classLessons(cls).find((x) => x.id === id) : null;
   document.querySelector('#lessonModalTitle').textContent = item ? 'Edytuj lekcję' : 'Dodaj lekcję';
   document.querySelector('#lessonName').value = item?.name || '';
+  document.querySelector('#lessonDay').innerHTML = weekdayOptionsHtml;
+  document.querySelector('#lessonDay').value = item?.day || day;
   document.querySelector('#lessonTeacher').value = item?.teacher || '';
   document.querySelector('#lessonRoom').value = item?.room || '';
   document.querySelector('#lessonStart').value = item?.start || '08:00';
@@ -332,32 +350,43 @@ document.querySelector('#cancelLesson').addEventListener('click', () => lessonDi
 lessonDialog.addEventListener('close', () => {
   if (lessonDialog.returnValue !== 'save') return;
   const name = document.querySelector('#lessonName').value.trim();
+  const day = document.querySelector('#lessonDay').value;
   const teacher = document.querySelector('#lessonTeacher').value.trim();
   const room = document.querySelector('#lessonRoom').value.trim();
   const start = document.querySelector('#lessonStart').value;
   const end = document.querySelector('#lessonEnd').value;
-  if (!name || !teacher || !start || !end || start >= end) return;
+  if (!name || !day || !teacher || !start || !end || start >= end) return;
   const lessons = classLessons(state.lessonTargetClass);
   if (state.editLesson) {
-    Object.assign(lessons.find((x) => x.id === state.editLesson), { name, teacher, room, start, end, color: state.lessonColor });
+    Object.assign(lessons.find((x) => x.id === state.editLesson), { name, day, teacher, room, start, end, color: state.lessonColor });
   } else {
-    lessons.push({ id: crypto.randomUUID(), name, teacher, room, start, end, color: state.lessonColor, addedBy: isAdmin() ? 'admin' : 'student' });
+    lessons.push({ id: crypto.randomUUID(), name, day, teacher, room, start, end, color: state.lessonColor, addedBy: isAdmin() ? 'admin' : 'student' });
   }
   saveLessonsByClass();
   if (state.lessonTargetClass === currentUser?.classroom) renderSchedule();
   if (document.querySelector('#adminClassSelect')?.value === state.lessonTargetClass) renderAdminLessonTable();
 });
 
+function renderDayTabs(container, activeDay, onSelect) {
+  container.innerHTML = weekdays.map((d) =>
+    `<button type="button" class="rounded-[9px] border px-3 py-1.5 text-sm font-bold${d.code === activeDay ? ' border-primary bg-primary text-white' : ' border-line bg-app text-muted'}" data-day="${d.code}">${d.label}</button>`
+  ).join('');
+  container.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => onSelect(b.dataset.day)));
+}
+
 function renderSchedule() {
   const now = new Date();
   const current = now.getHours() * 60 + now.getMinutes();
   const el = document.querySelector('#lessonList');
-  document.querySelector('#todayDate').textContent = now.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
-  const lessons = [...classLessons(currentUser?.classroom)].sort((a, b) => a.start.localeCompare(b.start));
+  const isToday = state.scheduleDay === currentWeekday();
+  document.querySelector('#scheduleDayTitle').textContent = `Plan lekcji · ${weekdayLabel(state.scheduleDay)}`;
+  document.querySelector('#todayDate').textContent = isToday ? now.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' }) : '';
+  renderDayTabs(document.querySelector('#scheduleDayTabs'), state.scheduleDay, (day) => { state.scheduleDay = day; renderSchedule(); });
+  const lessons = classLessons(currentUser?.classroom).filter((x) => x.day === state.scheduleDay).sort((a, b) => a.start.localeCompare(b.start));
   el.innerHTML = lessons.length ? lessons.map((x) => {
     const replacement = state.announcements.find((a) => a.lessonId === x.id && !a.pending);
     const replacementName = replacement?.title.replace(/^Zastępstwo:\s*/i, '');
-    const isNow = current >= minutes(x.start) && current <= minutes(x.end);
+    const isNow = isToday && current >= minutes(x.start) && current <= minutes(x.end);
     const editable = x.addedBy === 'student';
     return `<div class="relative grid grid-cols-[65px_1fr_auto] items-center overflow-hidden rounded-2xl border border-line${isNow ? ' outline outline-[3px] outline-offset-2 outline-amber-400' : ''}">
       ${isNow ? `<span class="absolute inset-x-0 top-0 z-10 border-t-[3px] border-amber-400 bg-amber-100 py-[3px] pr-2 text-right text-[9px] font-black tracking-widest text-amber-800">TERAZ</span>` : ''}
@@ -365,7 +394,7 @@ function renderSchedule() {
       <div class="px-4 py-3"><b class="block">${escapeHtml(x.name)}</b><span class="text-[.9em] text-muted">sala ${escapeHtml(x.room || '—')} · ${escapeHtml(x.teacher)}</span>${replacement ? `<span class="mt-1 inline-block rounded-lg bg-amber-100 px-2 py-1 text-[.78em] font-extrabold text-amber-800">Zastępstwo za: ${escapeHtml(replacementName)}</span>` : ''}</div>
       ${editable ? `<div class="mr-3 flex gap-1"><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-primary" data-edit-lesson="${x.id}" aria-label="Edytuj lekcję">✎</button><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-red-600" data-delete-own-lesson="${x.id}" aria-label="Usuń lekcję">🗑</button></div>` : ''}
     </div>`;
-  }).join('') : emptyState('Brak lekcji', 'Dodaj pierwszą lekcję do planu.');
+  }).join('') : emptyState('Brak lekcji', `Dodaj pierwszą lekcję na ${weekdayLabel(state.scheduleDay).toLowerCase()}.`);
   el.querySelectorAll('[data-edit-lesson]').forEach((b) => b.addEventListener('click', () => openLessonEditor(b.dataset.editLesson)));
   el.querySelectorAll('[data-delete-own-lesson]').forEach((b) => b.addEventListener('click', () => {
     if (!confirm('Usunąć tę lekcję ze swojego planu?')) return;
@@ -382,7 +411,8 @@ function renderAdminLessonTable() {
   const select = document.querySelector('#adminClassSelect');
   if (!select) return;
   const cls = select.value;
-  const lessons = [...classLessons(cls)].sort((a, b) => a.start.localeCompare(b.start));
+  renderDayTabs(document.querySelector('#adminDayTabs'), state.adminScheduleDay, (day) => { state.adminScheduleDay = day; renderAdminLessonTable(); });
+  const lessons = classLessons(cls).filter((x) => x.day === state.adminScheduleDay).sort((a, b) => a.start.localeCompare(b.start));
   const el = document.querySelector('#adminLessonTable');
   el.innerHTML = lessons.length ? `<div class="overflow-x-auto"><table class="w-full min-w-[560px] border-collapse text-left text-sm">
     <thead><tr class="border-b border-line text-muted">
@@ -430,8 +460,11 @@ function renderAnnouncements() {
 
   eventEl.innerHTML = events.length ? events.map((x) => {
     const meta = [x.date, x.time].filter(Boolean).join(' · ');
-    return `<article class="relative min-h-[145px] rounded-[25px] p-5 ${eventStyles[x.type] || eventStyles.other}" data-edit-announcement="${x.id}">
-      <button class="absolute right-3 top-3 rounded-lg bg-white/70 px-2 py-1 text-sm font-bold" title="Edytuj" data-edit-announcement="${x.id}">✎</button>
+    return `<article class="relative min-h-[145px] rounded-[25px] p-5 ${eventStyles[x.type] || eventStyles.other}">
+      <div class="absolute right-3 top-3 flex gap-1.5">
+        <button class="rounded-lg bg-white/70 px-2 py-1 text-sm font-bold" title="Edytuj" data-edit-announcement="${x.id}">✎</button>
+        <button class="rounded-lg bg-white/70 px-2 py-1 text-sm font-bold" title="Usuń" data-delete-announcement="${x.id}">🗑</button>
+      </div>
       <h2 class="mt-9 text-[1.2em] font-bold">${escapeHtml(x.title)}</h2><p class="mt-1 text-[.9em]">${escapeHtml(x.text)}</p>
       ${meta ? `<p class="mt-2 text-xs font-bold opacity-80">${escapeHtml(meta)}</p>` : ''}
       ${admin ? `<span class="mt-2 inline-block rounded bg-white/60 px-1.5 py-0.5 text-xs font-bold">${escapeHtml(classLabel(x.classroom))}</span>` : ''}
@@ -464,6 +497,12 @@ function renderAnnouncements() {
     saveAnnouncements();
     renderAnnouncements();
     renderSchedule();
+  }));
+  eventEl.querySelectorAll('[data-delete-announcement]').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Usunąć to ogłoszenie?')) return;
+    state.announcements = state.announcements.filter((x) => x.id !== b.dataset.deleteAnnouncement);
+    saveAnnouncements();
+    renderAnnouncements();
   }));
 }
 
@@ -628,7 +667,7 @@ function setupUserInterface() {
     adminClassSelect.innerHTML = classOptionsHtml;
     adminClassSelect.value = currentUser?.classroom || classCodes[0];
     adminClassSelect.addEventListener('change', renderAdminLessonTable);
-    document.querySelector('#addAdminLesson').addEventListener('click', () => openLessonEditor(null, adminClassSelect.value));
+    document.querySelector('#addAdminLesson').addEventListener('click', () => openLessonEditor(null, adminClassSelect.value, state.adminScheduleDay));
     renderAdminLessonTable();
     renderPendingReplacements();
   }
