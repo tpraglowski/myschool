@@ -12,27 +12,39 @@ const defaultLessons = [
   { id: 'l3', name: 'Informatyka', teacher: 'MW', room: '8', start: '10:00', end: '10:45', color: '#7c3aed' },
 ];
 const defaultAnnouncements = [
-  { id: 'room-change', title: 'Zastępstwo: Informatyka', text: 'Zajęcia odbędą się w sali 11.', lessonId: 'l3', type: 'replacement' },
-  { id: 'reminder', title: 'Przypomnienie', text: 'Do poniedziałku oddaj projekt z biologii.', lessonId: '', type: 'reminder' },
+  { id: 'room-change', title: 'Zastępstwo: Informatyka', text: 'Zajęcia odbędą się w sali 11.', lessonId: 'l3', type: 'replacement', classroom: '1A', pending: false, date: '', time: '' },
+  { id: 'reminder', title: 'Przypomnienie', text: 'Do poniedziałku oddaj projekt z biologii.', lessonId: '', type: 'reminder', classroom: 'all', pending: false, date: '', time: '' },
 ];
-const classCodes = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((n) => ['A', 'B'].map((letter) => `${n}${letter}`));
+const classCodes = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((n) => ['A', 'B', 'C'].map((letter) => `${n}${letter}`));
 const classOptionsHtml = classCodes.map((c) => `<option value="${c}">${c}</option>`).join('');
+const classroomOptionsHtml = (includeAll) => (includeAll ? '<option value="all">Wszystkie klasy</option>' : '') + classOptionsHtml;
+const classLabel = (cls) => (cls === 'all' ? 'Wszystkie klasy' : cls);
 
-// Migrate the old single shared schedule (pre-per-class) into class 1A so existing data isn't lost.
+// Migrate the old single shared schedule (pre-per-class) into class 1A so existing data isn't lost,
+// and backfill fields added later (addedBy / classroom / pending / date / time) for data saved by older versions.
 const legacyLessons = JSON.parse(localStorage.getItem('schoolLessons') || 'null');
 const storedLessonsByClass = JSON.parse(localStorage.getItem('schoolLessonsByClass') || 'null');
-const initialLessonsByClass = storedLessonsByClass || { '1A': legacyLessons || defaultLessons };
+const normalizeLessonsByClass = (byClass) => {
+  const out = {};
+  for (const [cls, lessons] of Object.entries(byClass || {})) out[cls] = (lessons || []).map((l) => ({ addedBy: 'admin', ...l }));
+  return out;
+};
+const initialLessonsByClass = normalizeLessonsByClass(storedLessonsByClass || { '1A': legacyLessons || defaultLessons });
+
+const storedAnnouncements = JSON.parse(localStorage.getItem('schoolAnnouncements') || 'null');
+const normalizeAnnouncements = (list) => (list || []).map((a) => ({ classroom: a.lessonId ? '1A' : 'all', pending: false, date: '', time: '', ...a }));
 
 const state = {
   subjects: JSON.parse(localStorage.getItem('schoolSubjects') || 'null') || defaultSubjects,
   lessonsByClass: initialLessonsByClass,
-  announcements: JSON.parse(localStorage.getItem('schoolAnnouncements') || 'null') || defaultAnnouncements,
+  announcements: normalizeAnnouncements(storedAnnouncements || defaultAnnouncements),
   activeSubject: null,
   mode: 'subject',
   editAnnouncement: null,
   editLesson: null,
   lessonTargetClass: null,
   forceReplacement: false,
+  isReplacementEditing: false,
   chosenGradient: gradients[0],
   lessonColor: lessonColors[0],
 };
@@ -174,15 +186,27 @@ function renderPicker() {
   }));
 }
 
+function refreshReplacementLessonOptions(cls) {
+  const lessonSelect = document.querySelector('#announcementLesson');
+  const previousValue = lessonSelect.value;
+  lessonSelect.innerHTML = '<option value="">Wybierz lekcję</option>' + classLessons(cls).map((x) => `<option value="${x.id}">${x.start} · ${escapeHtml(x.name)}</option>`).join('');
+  if ([...lessonSelect.options].some((o) => o.value === previousValue)) lessonSelect.value = previousValue;
+}
+document.querySelector('#announcementClassroom').addEventListener('change', (e) => {
+  if (!document.querySelector('#announcementLessonField').classList.contains('hidden')) refreshReplacementLessonOptions(e.target.value);
+});
+
 function openEditor(mode, announcementId = null) {
   state.mode = mode;
   state.editAnnouncement = announcementId;
   const isAnnouncement = mode === 'announcement';
   const existing = isAnnouncement && announcementId ? state.announcements.find((x) => x.id === announcementId) : null;
   const isReplacement = state.forceReplacement || !!existing?.lessonId;
+  const admin = isAdmin();
+  state.isReplacementEditing = isReplacement;
   state.chosenGradient = gradients[state.subjects.length % gradients.length];
 
-  document.querySelector('#modalTitle').textContent = isAnnouncement ? (existing ? 'Edytuj wpis' : 'Dodaj wpis') : mode === 'subject' ? 'Dodaj przedmiot' : 'Dodaj kompetencję';
+  document.querySelector('#modalTitle').textContent = isAnnouncement ? (existing ? 'Edytuj wpis' : isReplacement ? (admin ? 'Dodaj zastępstwo' : 'Zgłoś zastępstwo') : 'Dodaj wpis') : mode === 'subject' ? 'Dodaj przedmiot' : 'Dodaj kompetencję';
   document.querySelector('#nameLabel').textContent = isAnnouncement ? (isReplacement ? 'Nazwa zastępstwa' : 'Tytuł ogłoszenia') : mode === 'subject' ? 'Nazwa przedmiotu' : 'Nazwa kompetencji';
   document.querySelector('#itemName').placeholder = isAnnouncement ? (isReplacement ? 'np. Informatyka — pani Nowak' : 'np. Kiermasz szkolny') : mode === 'subject' ? 'np. Matematyka' : 'np. Rozwiązywanie równań';
   document.querySelector('#itemName').value = existing ? existing.title : '';
@@ -191,13 +215,30 @@ function openEditor(mode, announcementId = null) {
   document.querySelector('#itemDescription').required = isAnnouncement;
   document.querySelector('#gradientField').classList.toggle('hidden', isAnnouncement);
 
+  const showDateTime = isAnnouncement && !isReplacement;
+  document.querySelector('#itemDateTimeField').classList.toggle('hidden', !showDateTime);
+  document.querySelector('#itemDate').value = existing?.date || '';
+  document.querySelector('#itemTime').value = existing?.time || '';
+
+  const showClassroomPicker = isAnnouncement && (!isReplacement || admin);
+  const classroomField = document.querySelector('#announcementClassroomField');
+  const classroomSelect = document.querySelector('#announcementClassroom');
+  classroomField.classList.toggle('hidden', !showClassroomPicker);
+  if (showClassroomPicker) {
+    classroomSelect.innerHTML = classroomOptionsHtml(!isReplacement);
+    classroomSelect.value = existing?.classroom || (isReplacement ? currentUser?.classroom || classCodes[0] : 'all');
+  }
+
   const lessonField = document.querySelector('#announcementLessonField');
   const lessonSelect = document.querySelector('#announcementLesson');
   const typeField = document.querySelector('#announcementTypeField');
   lessonField.classList.toggle('hidden', !isAnnouncement || !isReplacement);
   typeField.classList.toggle('hidden', !isAnnouncement || isReplacement);
-  lessonSelect.innerHTML = '<option value="">Wybierz lekcję</option>' + classLessons(currentUser?.classroom).map((x) => `<option value="${x.id}">${x.start} · ${escapeHtml(x.name)}</option>`).join('');
-  lessonSelect.value = existing?.lessonId || '';
+  if (isReplacement) {
+    const targetClass = admin ? classroomSelect.value : currentUser?.classroom || classCodes[0];
+    refreshReplacementLessonOptions(targetClass);
+    lessonSelect.value = existing?.lessonId || '';
+  }
   document.querySelector('#announcementType').value = existing?.type || 'event';
 
   renderPicker();
@@ -220,17 +261,29 @@ dialog.addEventListener('close', () => {
   if (state.mode === 'announcement') {
     const text = document.querySelector('#itemDescription').value.trim();
     if (!text) return;
-    const lessonId = document.querySelector('#announcementLesson').value || '';
-    const type = state.forceReplacement || lessonId ? 'replacement' : document.querySelector('#announcementType').value;
+    const isReplacement = state.isReplacementEditing;
+    const admin = isAdmin();
+    const lessonId = isReplacement ? document.querySelector('#announcementLesson').value || '' : '';
+    if (isReplacement && !lessonId) return;
+    const classroom = isReplacement
+      ? admin ? document.querySelector('#announcementClassroom').value : currentUser?.classroom || classCodes[0]
+      : document.querySelector('#announcementClassroom').value;
+    const type = isReplacement ? 'replacement' : document.querySelector('#announcementType').value;
+    const date = isReplacement ? '' : document.querySelector('#itemDate').value;
+    const time = isReplacement ? '' : document.querySelector('#itemTime').value;
+    const pending = isReplacement && !admin;
+
     if (state.editAnnouncement) {
       const item = state.announcements.find((x) => x.id === state.editAnnouncement);
-      Object.assign(item, { title: name, text, lessonId, type });
+      Object.assign(item, { title: name, text, lessonId, type, classroom, date, time });
+      if (isReplacement) item.pending = pending;
     } else {
-      state.announcements.push({ id: crypto.randomUUID(), title: name, text, lessonId, type });
+      state.announcements.push({ id: crypto.randomUUID(), title: name, text, lessonId, type, classroom, date, time, pending });
     }
     saveAnnouncements();
     renderAnnouncements();
     renderSchedule();
+    if (admin) renderPendingReplacements();
     return;
   }
 
@@ -288,7 +341,7 @@ lessonDialog.addEventListener('close', () => {
   if (state.editLesson) {
     Object.assign(lessons.find((x) => x.id === state.editLesson), { name, teacher, room, start, end, color: state.lessonColor });
   } else {
-    lessons.push({ id: crypto.randomUUID(), name, teacher, room, start, end, color: state.lessonColor });
+    lessons.push({ id: crypto.randomUUID(), name, teacher, room, start, end, color: state.lessonColor, addedBy: isAdmin() ? 'admin' : 'student' });
   }
   saveLessonsByClass();
   if (state.lessonTargetClass === currentUser?.classroom) renderSchedule();
@@ -302,17 +355,26 @@ function renderSchedule() {
   document.querySelector('#todayDate').textContent = now.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
   const lessons = [...classLessons(currentUser?.classroom)].sort((a, b) => a.start.localeCompare(b.start));
   el.innerHTML = lessons.length ? lessons.map((x) => {
-    const replacement = state.announcements.find((a) => a.lessonId === x.id);
+    const replacement = state.announcements.find((a) => a.lessonId === x.id && !a.pending);
     const replacementName = replacement?.title.replace(/^Zastępstwo:\s*/i, '');
     const isNow = current >= minutes(x.start) && current <= minutes(x.end);
+    const editable = x.addedBy === 'student';
     return `<div class="relative grid grid-cols-[65px_1fr_auto] items-center overflow-hidden rounded-2xl border border-line${isNow ? ' outline outline-[3px] outline-offset-2 outline-amber-400' : ''}">
       ${isNow ? `<span class="absolute inset-x-0 top-0 z-10 border-t-[3px] border-amber-400 bg-amber-100 py-[3px] pr-2 text-right text-[9px] font-black tracking-widest text-amber-800">TERAZ</span>` : ''}
       <div class="grid h-full place-items-center py-4 text-center text-[.9em] font-extrabold text-white" style="background:${x.color}">${x.start}<br><small>${x.end}</small></div>
       <div class="px-4 py-3"><b class="block">${escapeHtml(x.name)}</b><span class="text-[.9em] text-muted">sala ${escapeHtml(x.room || '—')} · ${escapeHtml(x.teacher)}</span>${replacement ? `<span class="mt-1 inline-block rounded-lg bg-amber-100 px-2 py-1 text-[.78em] font-extrabold text-amber-800">Zastępstwo za: ${escapeHtml(replacementName)}</span>` : ''}</div>
-      <button class="mr-3 rounded-lg bg-app px-2 py-2 font-extrabold text-primary" data-edit-lesson="${x.id}" aria-label="Edytuj lekcję">✎</button>
+      ${editable ? `<div class="mr-3 flex gap-1"><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-primary" data-edit-lesson="${x.id}" aria-label="Edytuj lekcję">✎</button><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-red-600" data-delete-own-lesson="${x.id}" aria-label="Usuń lekcję">🗑</button></div>` : ''}
     </div>`;
   }).join('') : emptyState('Brak lekcji', 'Dodaj pierwszą lekcję do planu.');
   el.querySelectorAll('[data-edit-lesson]').forEach((b) => b.addEventListener('click', () => openLessonEditor(b.dataset.editLesson)));
+  el.querySelectorAll('[data-delete-own-lesson]').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Usunąć tę lekcję ze swojego planu?')) return;
+    const lessons = classLessons(currentUser.classroom);
+    const idx = lessons.findIndex((x) => x.id === b.dataset.deleteOwnLesson);
+    if (idx !== -1) lessons.splice(idx, 1);
+    saveLessonsByClass();
+    renderSchedule();
+  }));
 }
 
 // ---------- Admin: per-class lesson plan table ----------
@@ -329,6 +391,7 @@ function renderAdminLessonTable() {
       <th class="py-2 pr-3 font-semibold">Nauczyciel</th>
       <th class="py-2 pr-3 font-semibold">Sala</th>
       <th class="py-2 pr-3 font-semibold">Kolor</th>
+      <th class="py-2 pr-3 font-semibold">Źródło</th>
       <th class="py-2 pr-0 font-semibold text-right">Akcje</th>
     </tr></thead>
     <tbody>${lessons.map((x) => `<tr class="border-b border-line">
@@ -337,6 +400,7 @@ function renderAdminLessonTable() {
       <td class="py-2 pr-3">${escapeHtml(x.teacher)}</td>
       <td class="py-2 pr-3">${escapeHtml(x.room || '—')}</td>
       <td class="py-2 pr-3"><span class="inline-block h-4 w-4 rounded-full align-middle" style="background:${x.color}"></span></td>
+      <td class="py-2 pr-3 text-muted">${x.addedBy === 'student' ? 'Uczeń' : 'Admin'}</td>
       <td class="py-2 pr-0 text-right whitespace-nowrap">
         <button class="rounded-lg bg-app px-2 py-1 font-bold text-primary" data-admin-edit-lesson="${x.id}">Edytuj</button>
         <button class="ml-1 rounded-lg bg-app px-2 py-1 font-bold text-red-600" data-admin-delete-lesson="${x.id}">Usuń</button>
@@ -357,22 +421,35 @@ function renderAdminLessonTable() {
 const eventStyles = { event: 'bg-blue-100 text-blue-900', reminder: 'bg-green-100 text-green-900', other: 'bg-amber-100 text-amber-900' };
 
 function renderAnnouncements() {
-  const events = state.announcements.filter((x) => !x.lessonId);
-  const replacements = state.announcements.filter((x) => x.lessonId);
+  const admin = isAdmin();
+  const cls = currentUser?.classroom;
+  const events = state.announcements.filter((x) => !x.lessonId && (admin || x.classroom === 'all' || x.classroom === cls));
+  const replacements = state.announcements.filter((x) => x.lessonId && !x.pending && (admin || x.classroom === cls));
   const eventEl = document.querySelector('#announcementList');
   const replacementEl = document.querySelector('#replacementList');
 
-  eventEl.innerHTML = events.length ? events.map((x) =>
-    `<article class="relative min-h-[145px] rounded-[25px] p-5 ${eventStyles[x.type] || eventStyles.other}" data-edit-announcement="${x.id}">
+  eventEl.innerHTML = events.length ? events.map((x) => {
+    const meta = [x.date, x.time].filter(Boolean).join(' · ');
+    return `<article class="relative min-h-[145px] rounded-[25px] p-5 ${eventStyles[x.type] || eventStyles.other}" data-edit-announcement="${x.id}">
       <button class="absolute right-3 top-3 rounded-lg bg-white/70 px-2 py-1 text-sm font-bold" title="Edytuj" data-edit-announcement="${x.id}">✎</button>
       <h2 class="mt-9 text-[1.2em] font-bold">${escapeHtml(x.title)}</h2><p class="mt-1 text-[.9em]">${escapeHtml(x.text)}</p>
-    </article>`
-  ).join('') : emptyState('Brak ogłoszeń', 'Dodaj pierwszy szkolny plakat.');
+      ${meta ? `<p class="mt-2 text-xs font-bold opacity-80">${escapeHtml(meta)}</p>` : ''}
+      ${admin ? `<span class="mt-2 inline-block rounded bg-white/60 px-1.5 py-0.5 text-xs font-bold">${escapeHtml(classLabel(x.classroom))}</span>` : ''}
+    </article>`;
+  }).join('') : emptyState('Brak ogłoszeń', 'Dodaj pierwszy szkolny plakat.');
 
   replacementEl.innerHTML = replacements.length ? replacements.map((x) =>
-    `<div class="relative rounded-r-xl border-l-[5px] border-amber-500 bg-amber-50 py-3.5 pl-4 pr-12 text-amber-900">
-      <b class="block">${escapeHtml(x.title)}</b><span class="text-[.9em] text-amber-800">${escapeHtml(x.text)}</span>
-      <button class="absolute right-2.5 top-3 rounded-lg bg-white/70 px-2 py-1.5 font-bold text-amber-800" data-edit-announcement="${x.id}" aria-label="Edytuj zastępstwo">✎</button>
+    `<div class="rounded-r-xl border-l-[5px] border-amber-500 bg-amber-50 py-3.5 pl-4 pr-4 text-amber-900">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <b class="block">${escapeHtml(x.title)}${admin ? ` <span class="ml-1 rounded bg-amber-200 px-1.5 py-0.5 text-xs font-bold">${escapeHtml(x.classroom)}</span>` : ''}</b>
+          <span class="text-[.9em] text-amber-800">${escapeHtml(x.text)}</span>
+        </div>
+        ${admin ? `<div class="flex shrink-0 gap-1.5">
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-amber-800" data-edit-announcement="${x.id}" aria-label="Edytuj zastępstwo">✎</button>
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-red-700" data-delete-replacement="${x.id}" aria-label="Usuń zastępstwo">🗑</button>
+        </div>` : ''}
+      </div>
     </div>`
   ).join('') : emptyState('Brak zastępstw', 'Wszystkie lekcje odbywają się zgodnie z planem.');
 
@@ -380,6 +457,48 @@ function renderAnnouncements() {
     const item = state.announcements.find((x) => x.id === b.dataset.editAnnouncement);
     state.forceReplacement = !!item.lessonId;
     openEditor('announcement', b.dataset.editAnnouncement);
+  }));
+  replacementEl.querySelectorAll('[data-delete-replacement]').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Usunąć to zastępstwo?')) return;
+    state.announcements = state.announcements.filter((x) => x.id !== b.dataset.deleteReplacement);
+    saveAnnouncements();
+    renderAnnouncements();
+    renderSchedule();
+  }));
+}
+
+// ---------- Admin: pending replacement reports ----------
+function renderPendingReplacements() {
+  const el = document.querySelector('#pendingReplacements');
+  if (!el) return;
+  const pending = state.announcements.filter((x) => x.pending);
+  el.innerHTML = pending.length ? pending.map((x) => `
+    <div class="rounded-r-xl border-l-[5px] border-amber-500 bg-amber-50 py-3.5 pl-4 pr-4 text-amber-900">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <b class="block">${escapeHtml(x.title)} <span class="ml-1 rounded bg-amber-200 px-1.5 py-0.5 text-xs font-bold">${escapeHtml(x.classroom)}</span></b>
+          <span class="text-[.9em] text-amber-800">${escapeHtml(x.text)}</span>
+        </div>
+        <div class="flex shrink-0 gap-1.5">
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-green-700" data-approve-replacement="${x.id}">Zatwierdź</button>
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-red-700" data-reject-replacement="${x.id}">Usuń</button>
+        </div>
+      </div>
+    </div>`
+  ).join('') : `<div class="col-span-full rounded-[20px] border-2 border-dashed border-line px-5 py-11 text-center text-muted">Brak zgłoszeń.</div>`;
+  el.querySelectorAll('[data-approve-replacement]').forEach((b) => b.addEventListener('click', () => {
+    const item = state.announcements.find((x) => x.id === b.dataset.approveReplacement);
+    item.pending = false;
+    saveAnnouncements();
+    renderPendingReplacements();
+    renderAnnouncements();
+    renderSchedule();
+  }));
+  el.querySelectorAll('[data-reject-replacement]').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Usunąć to zgłoszenie?')) return;
+    state.announcements = state.announcements.filter((x) => x.id !== b.dataset.rejectReplacement);
+    saveAnnouncements();
+    renderPendingReplacements();
   }));
 }
 
@@ -511,7 +630,11 @@ function setupUserInterface() {
     adminClassSelect.addEventListener('change', renderAdminLessonTable);
     document.querySelector('#addAdminLesson').addEventListener('click', () => openLessonEditor(null, adminClassSelect.value));
     renderAdminLessonTable();
+    renderPendingReplacements();
   }
+  document.querySelector('#addReplacement').textContent = isAdmin() ? '+ Dodaj zastępstwo' : '+ Zgłoś zastępstwo';
+  renderSchedule();
+  renderAnnouncements();
   document.querySelector('#settingsPanel').insertAdjacentHTML('beforeend', `<button class="mt-[18px] rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" id="logoutButton">Wyloguj się</button>`);
   document.querySelector('#logoutButton').addEventListener('click', () => {
     localStorage.removeItem('schoolUser');
