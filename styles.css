@@ -7,6 +7,8 @@
   --line: #e7eaf3;
   --primary: #4f46e5;
   --shadow: #24304f0a;
+  --card-radius: 25px;
+  --panel-radius: 22px;
 }
 body.dark {
   --bg: #111827;
@@ -17,12 +19,30 @@ body.dark {
   --shadow: #0000002e;
 }
 
+/* "Wygląd kart" setting: rather than retagging every card/panel in the markup, this
+   targets Tailwind's own arbitrary-radius utility classes by substring, so every big
+   rounded card (rounded-[25px]) and section panel (rounded-[22px]) picks up the chosen
+   scale automatically. */
+body.radius-small { --card-radius: 14px; --panel-radius: 14px; }
+body.radius-medium { --card-radius: 19px; --panel-radius: 18px; }
+body.radius-large { --card-radius: 25px; --panel-radius: 22px; }
+[class*="rounded-[25px]"] { border-radius: var(--card-radius) !important; }
+[class*="rounded-[22px]"] { border-radius: var(--panel-radius) !important; }
+
 /* Fade-in used on the view that becomes active */
 @keyframes appear {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
 .view:not(.hidden) { animation: appear .24s ease; }
+
+/* "Animacje: Wyłączone" setting — turns off motion app-wide without touching layout. */
+body.no-animations,
+body.no-animations * {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
 
 /* Small swatch previews in Ustawienia (decorative dot patterns) */
 .smile-bg { background-image: radial-gradient(circle at 15px 15px, #ffd54f 0 10px, transparent 11px), radial-gradient(circle at 38px 30px, #ffd54f 0 9px, transparent 10px); }

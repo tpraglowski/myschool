@@ -88,9 +88,9 @@ const normalizeSubjectsByClass = (byClass) => {
 const legacyStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
 const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
 const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
-const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, ...a }));
+const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, ...a }));
 
-const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements'];
+const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'notifications'];
 const seedValue = {
   subjectsByClass: normalizeSubjectsByClass(legacySubjectsByClass || { '1A': legacySubjects || defaultSubjects }),
   starterSubjectsByGrade: legacyStarterByGrade || Object.fromEntries(
@@ -98,6 +98,7 @@ const seedValue = {
   ),
   lessonsByClass: normalizeLessonsByClass(legacyLessonsByClass || { '1A': legacyLessons || defaultLessons }),
   announcements: normalizeAnnouncements(legacyAnnouncements || defaultAnnouncements),
+  notifications: [],
 };
 
 const state = {
@@ -105,6 +106,7 @@ const state = {
   starterSubjectsByGrade: {},
   lessonsByClass: {},
   announcements: [],
+  notifications: [],
   activeSubject: null,
   activeTemplateSubject: null,
   mode: 'subject',
@@ -126,6 +128,7 @@ const saveSubjectsByClass = () => setDoc(storeDoc('subjectsByClass'), { value: s
 const saveStarterSubjectsByGrade = () => setDoc(storeDoc('starterSubjectsByGrade'), { value: state.starterSubjectsByGrade });
 const saveLessonsByClass = () => setDoc(storeDoc('lessonsByClass'), { value: state.lessonsByClass });
 const saveAnnouncements = () => setDoc(storeDoc('announcements'), { value: state.announcements });
+const saveNotifications = () => setDoc(storeDoc('notifications'), { value: state.notifications });
 const classLessons = (cls) => state.lessonsByClass[cls] || (state.lessonsByClass[cls] = []);
 
 function applyStoreValue(key, value) {
@@ -133,6 +136,7 @@ function applyStoreValue(key, value) {
   else if (key === 'starterSubjectsByGrade') state.starterSubjectsByGrade = value || {};
   else if (key === 'lessonsByClass') state.lessonsByClass = normalizeLessonsByClass(value);
   else if (key === 'announcements') state.announcements = normalizeAnnouncements(value);
+  else if (key === 'notifications') state.notifications = value || [];
 }
 
 function renderAfterStoreChange(key) {
@@ -144,12 +148,86 @@ function renderAfterStoreChange(key) {
   } else if (key === 'lessonsByClass') {
     renderSchedule();
     renderAdminLessonTable();
+    renderDashboard();
   } else if (key === 'announcements') {
     renderAnnouncements();
     renderPendingReplacements();
     renderSchedule();
+    renderDashboard();
+  } else if (key === 'notifications') {
+    renderNotifications();
   }
 }
+
+// ---------- Notifications ----------
+// Notifications are generated automatically by the app whenever something a user
+// would care about changes (new event, schedule change, class change) — there's no
+// separate authoring UI, so this stays a byproduct of the existing actions rather than
+// a second parallel system. They live in the same one-doc-per-collection Firestore
+// pattern as announcements/lessons. Per-user read state lives on the account doc
+// (notifReadIds), consistent with how accounts already store per-user data.
+function pushNotification({ title, text, classroom = null, targetUser = null, type = 'info' }) {
+  state.notifications = [
+    { id: crypto.randomUUID(), title, text, classroom, targetUser, type, createdAt: new Date().toISOString() },
+    ...state.notifications,
+  ].slice(0, 60);
+  saveNotifications();
+  renderNotifications();
+}
+function notificationsForUser(user) {
+  if (!user) return [];
+  const classes = accessibleClasses(user);
+  return state.notifications.filter((n) => (
+    n.targetUser
+      ? normalise(n.targetUser) === normalise(user.name)
+      : !n.classroom || n.classroom === 'all' || classes.includes(n.classroom)
+  ));
+}
+function renderNotifications() {
+  const wrap = document.querySelector('#notifWrap');
+  if (!currentUser) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  const list = notificationsForUser(currentUser);
+  const account = accounts.find((a) => normalise(a.name) === normalise(currentUser.name));
+  const readIds = new Set(account?.notifReadIds || []);
+  const unread = list.filter((n) => !readIds.has(n.id)).length;
+  const badge = document.querySelector('#notifBadge');
+  badge.textContent = unread > 9 ? '9+' : String(unread);
+  badge.classList.toggle('hidden', unread === 0);
+  badge.classList.toggle('flex', unread > 0);
+  document.querySelector('#notifList').innerHTML = list.length ? list.map((n) => {
+    const isUnread = !readIds.has(n.id);
+    const when = new Date(n.createdAt).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return `<div class="relative rounded-xl border border-line px-3.5 py-3${isUnread ? ' bg-app' : ''}">
+      ${isUnread ? '<span class="absolute right-3.5 top-3.5 h-2 w-2 rounded-full bg-primary" aria-hidden="true"></span>' : ''}
+      <b class="block pr-4">${escapeHtml(n.title)}</b>
+      <span class="text-[.9em] text-muted">${escapeHtml(n.text)}</span>
+      <span class="mt-1 block text-xs font-bold text-muted">${when}</span>
+    </div>`;
+  }).join('') : `<p class="px-2 py-6 text-center text-muted">Brak powiadomień.</p>`;
+}
+document.querySelector('#notifBell').addEventListener('click', () => {
+  const panel = document.querySelector('#notifPanel');
+  const opening = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !opening);
+  document.querySelector('#notifBell').setAttribute('aria-expanded', String(opening));
+});
+document.addEventListener('click', (e) => {
+  const wrap = document.querySelector('#notifWrap');
+  if (!wrap.contains(e.target)) {
+    document.querySelector('#notifPanel').classList.add('hidden');
+    document.querySelector('#notifBell').setAttribute('aria-expanded', 'false');
+  }
+});
+document.querySelector('#notifMarkAllRead').addEventListener('click', () => {
+  if (!currentUser) return;
+  const account = accounts.find((a) => normalise(a.name) === normalise(currentUser.name));
+  if (!account) return;
+  const ids = notificationsForUser(currentUser).map((n) => n.id);
+  account.notifReadIds = Array.from(new Set([...(account.notifReadIds || []), ...ids]));
+  setDoc(accountDocRef(account.name), account);
+  renderNotifications();
+});
 
 async function loadAccounts() {
   const snap = await getDocs(accountsCollection);
@@ -506,10 +584,21 @@ dialog.addEventListener('close', () => {
       if (isReplacement) item.pending = pending;
     } else {
       state.announcements.push({ id: crypto.randomUUID(), title: name, text, lessonId, type, classroom, date, time, pending, createdBy: currentUser?.name || '' });
+      if (isReplacement && !pending) {
+        pushNotification({ title: 'Plan lekcji został zmieniony', text: `Zastępstwo: ${name}`, classroom, type: 'schedule' });
+      } else if (!isReplacement) {
+        pushNotification({
+          title: type === 'event' ? 'Dodano nowe wydarzenie' : 'Dodano ważną informację',
+          text: name,
+          classroom,
+          type: 'event',
+        });
+      }
     }
     saveAnnouncements();
     renderAnnouncements();
     renderSchedule();
+    renderDashboard();
     if (admin) renderPendingReplacements();
     return;
   }
@@ -584,7 +673,8 @@ lessonDialog.addEventListener('close', () => {
     lessons.push({ id: crypto.randomUUID(), name, day, teacher, room, start, end, color: state.lessonColor, addedBy: isAdmin() ? 'admin' : 'student' });
   }
   saveLessonsByClass();
-  if (state.lessonTargetClass === viewingClass()) renderSchedule();
+  pushNotification({ title: 'Plan lekcji został zmieniony', text: `${name} — ${weekdayLabel(day)} ${start}–${end}`, classroom: state.lessonTargetClass, type: 'schedule' });
+  if (state.lessonTargetClass === viewingClass()) { renderSchedule(); renderDashboard(); }
   if (document.querySelector('#adminClassSelect')?.value === state.lessonTargetClass) renderAdminLessonTable();
 });
 
@@ -644,8 +734,94 @@ function renderSchedule() {
     const idx = lessons.findIndex((x) => x.id === b.dataset.deleteOwnLesson);
     if (idx !== -1) lessons.splice(idx, 1);
     saveLessonsByClass();
+    pushNotification({ title: 'Plan lekcji został zmieniony', text: 'Usunięto lekcję z planu.', classroom: viewingClass(), type: 'schedule' });
     renderSchedule();
+    renderDashboard();
   }));
+}
+
+// ---------- Home dashboard ----------
+function pluralLessons(n) {
+  if (n === 1) return 'lekcja';
+  const lastTwo = n % 100, lastDigit = n % 10;
+  if (lastDigit >= 2 && lastDigit <= 4 && !(lastTwo >= 12 && lastTwo <= 14)) return 'lekcje';
+  return 'lekcji';
+}
+function todayLessonsSorted() {
+  const cls = viewingClass();
+  if (!cls) return [];
+  return classLessons(cls).filter((x) => x.day === currentWeekday()).sort((a, b) => a.start.localeCompare(b.start));
+}
+function lessonRowHtml(x) {
+  const replacement = state.announcements.find((a) => a.lessonId === x.id && !a.pending);
+  const replacementName = replacement?.title.replace(/^Zastępstwo:\s*/i, '');
+  return `<div class="flex items-start gap-3">
+    <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-center text-[.8em] font-extrabold leading-tight text-white" style="background:${x.color}">${x.start}</span>
+    <div>
+      <b class="block text-[1.1em]">${escapeHtml(x.name)}</b>
+      <span class="text-[.9em] text-muted">${x.start}–${x.end} · sala ${escapeHtml(x.room || '—')} · ${escapeHtml(x.teacher)}</span>
+      ${replacement ? `<span class="mt-1 inline-block rounded-lg bg-amber-100 px-2 py-1 text-[.78em] font-extrabold text-amber-800">Zastępstwo za: ${escapeHtml(replacementName)}</span>` : ''}
+    </div>
+  </div>`;
+}
+function renderNextLessonCard() {
+  const body = document.querySelector('#nextLessonBody');
+  const lessons = todayLessonsSorted();
+  const now = new Date();
+  const current = now.getHours() * 60 + now.getMinutes();
+  const active = lessons.find((x) => current >= minutes(x.start) && current <= minutes(x.end));
+  const next = lessons.find((x) => minutes(x.start) > current);
+  if (!lessons.length) {
+    body.innerHTML = `<p class="text-muted">Brak lekcji dzisiaj.</p>`;
+  } else if (active) {
+    body.innerHTML = `<span class="mb-2 inline-block rounded-lg bg-amber-100 px-2 py-1 text-[.78em] font-black tracking-wide text-amber-800">TERAZ — TRWA LEKCJA</span>${lessonRowHtml(active)}`;
+  } else if (next) {
+    body.innerHTML = `<span class="mb-2 inline-block rounded-lg bg-blue-100 px-2 py-1 text-[.78em] font-black tracking-wide text-blue-800">Następna lekcja za ${minutes(next.start) - current} min</span>${lessonRowHtml(next)}`;
+  } else {
+    body.innerHTML = `<p class="text-muted">Koniec lekcji na dziś.</p>`;
+  }
+}
+function renderTodaySummaryCard() {
+  const body = document.querySelector('#todaySummaryBody');
+  const lessons = todayLessonsSorted();
+  if (!lessons.length) {
+    body.innerHTML = `<p class="text-muted">Brak lekcji zaplanowanych na ${weekdayLabel(currentWeekday()).toLowerCase()}.</p>`;
+    return;
+  }
+  const now = new Date();
+  const current = now.getHours() * 60 + now.getMinutes();
+  const upcoming = lessons.find((x) => current < minutes(x.end));
+  body.innerHTML = `<ul class="grid gap-1.5 text-[.95em]">
+    <li><b>${lessons.length}</b> ${pluralLessons(lessons.length)}</li>
+    <li>Pierwsza: <b>${escapeHtml(lessons[0].name)}</b> o ${lessons[0].start}</li>
+    <li>Ostatnia: <b>${escapeHtml(lessons[lessons.length - 1].name)}</b> do ${lessons[lessons.length - 1].end}</li>
+    <li>Najbliższa: <b>${upcoming ? `${escapeHtml(upcoming.name)} o ${upcoming.start}` : 'brak — koniec lekcji'}</b></li>
+  </ul>`;
+}
+function renderUpcomingEventsCard() {
+  const body = document.querySelector('#upcomingEventsBody');
+  const admin = isAdmin();
+  const cls = viewingClass();
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const events = state.announcements
+    .filter((x) => !x.lessonId && (admin || x.classroom === 'all' || x.classroom === cls))
+    .filter((x) => !x.date || x.date >= todayStr)
+    .sort((a, b) => (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99'))
+    .slice(0, 3);
+  body.innerHTML = events.length ? events.map((x) => {
+    const meta = [x.date, x.time].filter(Boolean).join(' · ');
+    return `<div class="rounded-xl border border-line px-3.5 py-3">
+      <b class="block">${escapeHtml(x.title)}</b>
+      <span class="text-[.88em] text-muted">${escapeHtml(x.text)}</span>
+      ${meta ? `<span class="mt-1 block text-xs font-bold text-primary">${escapeHtml(meta)}</span>` : ''}
+    </div>`;
+  }).join('') : `<p class="text-muted">Brak nadchodzących wydarzeń.</p>`;
+}
+function renderDashboard() {
+  if (!currentUser) return;
+  renderNextLessonCard();
+  renderTodaySummaryCard();
+  renderUpcomingEventsCard();
 }
 
 // ---------- Admin: per-class lesson plan table ----------
@@ -684,8 +860,9 @@ function renderAdminLessonTable() {
     if (!confirm('Usunąć tę lekcję z planu klasy?')) return;
     state.lessonsByClass[cls] = classLessons(cls).filter((x) => x.id !== b.dataset.adminDeleteLesson);
     saveLessonsByClass();
+    pushNotification({ title: 'Plan lekcji został zmieniony', text: 'Usunięto lekcję z planu klasy.', classroom: cls, type: 'schedule' });
     renderAdminLessonTable();
-    if (cls === viewingClass()) renderSchedule();
+    if (cls === viewingClass()) { renderSchedule(); renderDashboard(); }
   }));
 }
 
@@ -775,9 +952,11 @@ function renderPendingReplacements() {
     const item = state.announcements.find((x) => x.id === b.dataset.approveReplacement);
     item.pending = false;
     saveAnnouncements();
+    pushNotification({ title: 'Plan lekcji został zmieniony', text: `Zastępstwo: ${item.title}`, classroom: item.classroom, type: 'schedule' });
     renderPendingReplacements();
     renderAnnouncements();
     renderSchedule();
+    renderDashboard();
   }));
   el.querySelectorAll('[data-reject-replacement]').forEach((b) => b.addEventListener('click', () => {
     if (!confirm('Usunąć to zgłoszenie?')) return;
@@ -838,25 +1017,33 @@ function renderStarterSubjects() {
 document.querySelector('#addStarterSubject')?.addEventListener('click', () => openEditor('subject', null, 'template'));
 
 // ---------- Settings ----------
+// Every visual setting is cached in localStorage (so it applies instantly on load,
+// even before Firestore responds) AND mirrored into the logged-in account's Firestore
+// doc (settings: {...}) via persistUserSettings(), so it follows that user to any other
+// browser/device they log into — see applyAccountSettings(), called from finishLogin()
+// and from boot()'s "restore session" path.
 const fontSize = document.querySelector('#fontSize');
-const storedFont = localStorage.getItem('schoolFontSize');
-fontSize.value = storedFont || 16;
-document.documentElement.style.fontSize = fontSize.value + 'px';
+function applyFontSize(px) {
+  document.documentElement.style.fontSize = px + 'px';
+  fontSize.value = px;
+}
+applyFontSize(localStorage.getItem('schoolFontSize') || 16);
 fontSize.addEventListener('input', () => {
-  document.documentElement.style.fontSize = fontSize.value + 'px';
+  applyFontSize(fontSize.value);
   localStorage.setItem('schoolFontSize', fontSize.value);
+  persistUserSettings();
 });
 
-const storedBg = localStorage.getItem('schoolBg') || '#f5f7ff';
-document.documentElement.style.setProperty('--bg', storedBg);
-document.querySelectorAll('[data-bg]').forEach((b) => {
-  setSelected(b, b.dataset.bg === storedBg, ['ring-2', 'ring-ink', 'ring-offset-2'], []);
-  b.addEventListener('click', () => {
-    document.documentElement.style.setProperty('--bg', b.dataset.bg);
-    localStorage.setItem('schoolBg', b.dataset.bg);
-    document.querySelectorAll('[data-bg]').forEach((x) => setSelected(x, x === b, ['ring-2', 'ring-ink', 'ring-offset-2'], []));
-  });
-});
+function applyBg(hex) {
+  document.documentElement.style.setProperty('--bg', hex);
+  document.querySelectorAll('[data-bg]').forEach((x) => setSelected(x, x.dataset.bg === hex, ['ring-2', 'ring-ink', 'ring-offset-2'], []));
+}
+applyBg(localStorage.getItem('schoolBg') || '#f5f7ff');
+document.querySelectorAll('[data-bg]').forEach((b) => b.addEventListener('click', () => {
+  applyBg(b.dataset.bg);
+  localStorage.setItem('schoolBg', b.dataset.bg);
+  persistUserSettings();
+}));
 
 const colourSettingWrap = document.querySelector('#colourSettingWrap');
 const colourSetting = document.querySelector('#backgrounds').closest('[data-setting]');
@@ -875,31 +1062,133 @@ const effectiveDark = (mode) => mode === 'dark' || (mode === 'auto' && !isDaytim
 function applyMode(mode) {
   document.body.classList.toggle('dark', effectiveDark(mode));
   updateColourVisibility();
+  document.querySelectorAll('[data-mode]').forEach((x) => setSelected(x, x.dataset.mode === mode, ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']));
 }
-const storedMode = localStorage.getItem('schoolMode') || 'auto';
-applyMode(storedMode);
-document.querySelectorAll('[data-mode]').forEach((b) => {
-  setSelected(b, b.dataset.mode === storedMode, ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']);
-  b.addEventListener('click', () => {
-    localStorage.setItem('schoolMode', b.dataset.mode);
-    applyMode(b.dataset.mode);
-    document.querySelectorAll('[data-mode]').forEach((x) => setSelected(x, x === b, ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']));
-  });
-});
+applyMode(localStorage.getItem('schoolMode') || 'auto');
+document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+  localStorage.setItem('schoolMode', b.dataset.mode);
+  applyMode(b.dataset.mode);
+  persistUserSettings();
+}));
 setInterval(() => applyMode(localStorage.getItem('schoolMode') || 'auto'), 5 * 60 * 1000);
 
-const storedPattern = localStorage.getItem('schoolPattern') || 'none';
 const patternClasses = ['pattern-smile', 'pattern-heart', 'pattern-star', 'pattern-panda'];
-if (storedPattern !== 'none') document.body.classList.add('pattern-' + storedPattern);
-document.querySelectorAll('[data-pattern]').forEach((b) => {
-  setSelected(b, b.dataset.pattern === storedPattern, ['ring-2', 'ring-ink', 'ring-offset-1'], []);
-  b.addEventListener('click', () => {
-    document.body.classList.remove(...patternClasses);
-    if (b.dataset.pattern !== 'none') document.body.classList.add('pattern-' + b.dataset.pattern);
-    localStorage.setItem('schoolPattern', b.dataset.pattern);
-    document.querySelectorAll('[data-pattern]').forEach((x) => setSelected(x, x === b, ['ring-2', 'ring-ink', 'ring-offset-1'], []));
-  });
-});
+function applyPattern(pattern) {
+  document.body.classList.remove(...patternClasses);
+  if (pattern !== 'none') document.body.classList.add('pattern-' + pattern);
+  document.querySelectorAll('[data-pattern]').forEach((x) => setSelected(x, x.dataset.pattern === pattern, ['ring-2', 'ring-ink', 'ring-offset-1'], []));
+}
+applyPattern(localStorage.getItem('schoolPattern') || 'none');
+document.querySelectorAll('[data-pattern]').forEach((b) => b.addEventListener('click', () => {
+  applyPattern(b.dataset.pattern);
+  localStorage.setItem('schoolPattern', b.dataset.pattern);
+  persistUserSettings();
+}));
+
+function applyAnimations(enabled) {
+  document.body.classList.toggle('no-animations', !enabled);
+  document.querySelectorAll('[data-animations]').forEach((x) => setSelected(x, x.dataset.animations === (enabled ? 'on' : 'off'), ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']));
+}
+applyAnimations(localStorage.getItem('schoolAnimations') !== 'off');
+document.querySelectorAll('[data-animations]').forEach((b) => b.addEventListener('click', () => {
+  const enabled = b.dataset.animations === 'on';
+  applyAnimations(enabled);
+  localStorage.setItem('schoolAnimations', enabled ? 'on' : 'off');
+  persistUserSettings();
+}));
+
+function applyRadius(radius) {
+  document.body.classList.remove('radius-small', 'radius-medium', 'radius-large');
+  document.body.classList.add('radius-' + radius);
+  document.querySelectorAll('[data-radius]').forEach((x) => setSelected(x, x.dataset.radius === radius, ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']));
+}
+applyRadius(localStorage.getItem('schoolRadius') || 'large');
+document.querySelectorAll('[data-radius]').forEach((b) => b.addEventListener('click', () => {
+  applyRadius(b.dataset.radius);
+  localStorage.setItem('schoolRadius', b.dataset.radius);
+  persistUserSettings();
+}));
+
+function applyAccent(hex) {
+  document.documentElement.style.setProperty('--primary', hex);
+  document.querySelectorAll('[data-accent]').forEach((x) => setSelected(x, x.dataset.accent === hex, ['ring-2', 'ring-ink', 'ring-offset-2'], []));
+}
+applyAccent(localStorage.getItem('schoolAccent') || '#4f46e5');
+document.querySelectorAll('[data-accent]').forEach((b) => b.addEventListener('click', () => {
+  applyAccent(b.dataset.accent);
+  localStorage.setItem('schoolAccent', b.dataset.accent);
+  persistUserSettings();
+}));
+
+function currentSettingsSnapshot() {
+  return {
+    fontSize: Number(localStorage.getItem('schoolFontSize')) || 16,
+    mode: localStorage.getItem('schoolMode') || 'auto',
+    bg: localStorage.getItem('schoolBg') || '#f5f7ff',
+    pattern: localStorage.getItem('schoolPattern') || 'none',
+    animations: localStorage.getItem('schoolAnimations') !== 'off',
+    radius: localStorage.getItem('schoolRadius') || 'large',
+    accent: localStorage.getItem('schoolAccent') || '#4f46e5',
+  };
+}
+function persistUserSettings() {
+  if (!currentUser) return;
+  const settings = currentSettingsSnapshot();
+  const account = accounts.find((a) => normalise(a.name) === normalise(currentUser.name));
+  if (!account) return;
+  account.settings = settings;
+  setDoc(accountDocRef(account.name), account);
+}
+function applyAccountSettings(settings) {
+  if (!settings) return;
+  localStorage.setItem('schoolFontSize', settings.fontSize ?? 16);
+  localStorage.setItem('schoolMode', settings.mode || 'auto');
+  localStorage.setItem('schoolBg', settings.bg || '#f5f7ff');
+  localStorage.setItem('schoolPattern', settings.pattern || 'none');
+  localStorage.setItem('schoolAnimations', settings.animations === false ? 'off' : 'on');
+  localStorage.setItem('schoolRadius', settings.radius || 'large');
+  localStorage.setItem('schoolAccent', settings.accent || '#4f46e5');
+  applyFontSize(settings.fontSize || 16);
+  applyBg(settings.bg || '#f5f7ff');
+  applyMode(settings.mode || 'auto');
+  applyPattern(settings.pattern || 'none');
+  applyAnimations(settings.animations !== false);
+  applyRadius(settings.radius || 'large');
+  applyAccent(settings.accent || '#4f46e5');
+}
+
+// ---------- Password hashing ----------
+// Passwords are never stored or compared as plain text. Each account keeps a random
+// per-account salt plus a PBKDF2-SHA256 derived hash (Web Crypto, no extra library).
+// This is still a client-side scheme (there's no server to hash on, only Firestore),
+// so it doesn't defend against a compromised Firestore project the way a real backend
+// auth service would — but it means a leaked/rules-misconfigured database no longer
+// hands out anyone's actual password, which plain text did.
+function bytesToHex(bytes) { return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join(''); }
+function hexToBytes(hex) { const arr = new Uint8Array(hex.length / 2); for (let i = 0; i < arr.length; i++) arr[i] = parseInt(hex.substr(i * 2, 2), 16); return arr; }
+async function hashPassword(password, saltHex = null) {
+  const salt = saltHex ? hexToBytes(saltHex) : crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, keyMaterial, 256);
+  return { hash: bytesToHex(new Uint8Array(bits)), salt: bytesToHex(salt) };
+}
+async function verifyPassword(password, hash, salt) {
+  const attempt = await hashPassword(password, salt);
+  return attempt.hash === hash;
+}
+// Ties this browser's Firebase Anonymous Auth UID to the account being logged into, so
+// Firestore security rules can eventually check "is this request coming from a device
+// that actually logged into this account" instead of trusting the app alone (see
+// firestore.rules). Keeps only the last 5 devices to bound the array's size.
+function rememberAuthUid(user) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return;
+  user.authUids = Array.from(new Set([...(user.authUids || []), uid])).slice(-5);
+  // Until the updated rules in firestore.rules are published in the Firebase console,
+  // this collection isn't allowed by the live rules yet — fail silently rather than
+  // surface an unhandled-rejection error for a write nothing depends on today.
+  setDoc(doc(db, 'uidAccount', uid), { accountId: normalise(user.name) }).catch(() => {});
+}
 
 // ---------- Accounts / login ----------
 const classSelect = document.querySelector('#classroom');
@@ -964,6 +1253,8 @@ function logout(message) {
   currentUser = null;
   document.querySelector('#homeAdmin')?.remove();
   document.querySelector('#logoutButton')?.remove();
+  document.querySelector('#notifPanel').classList.add('hidden');
+  renderNotifications();
   document.querySelector('#loginLayer').classList.remove('hidden');
   screen('startScreen');
   show('home');
@@ -975,10 +1266,12 @@ function finishLogin(user) {
   localStorage.setItem('schoolUser', JSON.stringify(currentUser));
   state.viewingClassroom = accessibleClasses(currentUser)[0];
   document.querySelector('#loginLayer').classList.add('hidden');
+  applyAccountSettings(user.settings);
+  persistUserSettings();
   setupUserInterface();
 }
 
-document.querySelector('#registerForm').addEventListener('submit', (e) => {
+document.querySelector('#registerForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = capitalize(document.querySelector('#registerUsername').value.trim());
   if (accounts.some((x) => normalise(x.name) === normalise(name))) return alert('Takie konto już istnieje.');
@@ -987,7 +1280,9 @@ document.querySelector('#registerForm').addEventListener('submit', (e) => {
   if (role === 'parent' && (!childClasses.length || childClasses.length > 5)) return alert('Wybierz od 1 do 5 klas dziecka.');
   const classroom = role === 'student' ? classSelect.value : role === 'parent' ? childClasses[0] : null;
   const pending = role === 'teacher';
-  const user = { name, role, classroom, childClasses, pending, password: document.querySelector('#registerPassword').value, admin: normalise(name) === 'tpraglowski' };
+  const { hash, salt } = await hashPassword(document.querySelector('#registerPassword').value);
+  const user = { name, role, classroom, childClasses, pending, passwordHash: hash, passwordSalt: salt, admin: normalise(name) === 'tpraglowski', authUids: [] };
+  rememberAuthUid(user);
   accounts.push(user);
   setDoc(accountDocRef(user.name), user);
   if (role === 'student') {
@@ -1006,11 +1301,29 @@ document.querySelector('#registerForm').addEventListener('submit', (e) => {
   finishLogin(user);
 });
 
-document.querySelector('#loginForm').addEventListener('submit', (e) => {
+document.querySelector('#loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const user = accounts.find((x) => normalise(x.name) === normalise(document.querySelector('#username').value) && x.password === document.querySelector('#password').value);
-  if (!user) return alert('Nieprawidłowa nazwa użytkownika lub hasło.');
+  const password = document.querySelector('#password').value;
+  const user = accounts.find((x) => normalise(x.name) === normalise(document.querySelector('#username').value));
+  let ok = false;
+  if (user?.passwordHash && user?.passwordSalt) {
+    ok = await verifyPassword(password, user.passwordHash, user.passwordSalt);
+  } else if (user?.password !== undefined) {
+    // Legacy account created before password hashing was added — verify once against
+    // the old plain-text field, then transparently upgrade it to a salted hash so the
+    // plain-text password is never written back to Firestore again.
+    ok = user.password === password;
+    if (ok) {
+      const { hash, salt } = await hashPassword(password);
+      delete user.password;
+      user.passwordHash = hash;
+      user.passwordSalt = salt;
+    }
+  }
+  if (!user || !ok) return alert('Nieprawidłowa nazwa użytkownika lub hasło.');
   if (user.role === 'teacher' && user.pending) return alert('Konto nauczyciela oczekuje jeszcze na zatwierdzenie przez administratora.');
+  rememberAuthUid(user);
+  setDoc(accountDocRef(user.name), user);
   finishLogin(user);
 });
 
@@ -1132,6 +1445,9 @@ accountEditorDialog.addEventListener('close', () => {
   accounts = accounts.map((a) => (normalise(a.name) === normalise(oldName) ? updated : a));
   if (nameChanged) deleteDoc(accountDocRef(oldName));
   setDoc(accountDocRef(newName), updated);
+  if (original.role !== role || original.classroom !== classroom) {
+    pushNotification({ title: 'Nastąpiła zmiana dotycząca Twojej klasy', text: 'Administrator zmienił Twoją rolę lub klasę na koncie. Zaloguj się ponownie, aby zobaczyć zmiany.', targetUser: newName, type: 'account' });
+  }
   renderAccounts();
 });
 
@@ -1195,6 +1511,7 @@ async function runSchoolYearRollover() {
       if (a.role !== 'student' || a.graduated || !a.classroom) return;
       if (!subjectsForClass(a.classroom).length) seedClassSubjectsFromStarter(a.classroom);
     });
+    pushNotification({ title: 'Nastąpiła zmiana dotycząca Twojej klasy', text: 'Rozpoczął się nowy rok szkolny — sprawdź swoją klasę i plan lekcji.', classroom: 'all', type: 'account' });
   }
 
   const octFirst = new Date(label, 9, 1);
@@ -1238,6 +1555,8 @@ function setupUserInterface() {
   renderSubjects();
   renderSchedule();
   renderAnnouncements();
+  renderDashboard();
+  renderNotifications();
   document.querySelector('#settingsPanel').insertAdjacentHTML('beforeend', `<button class="mt-[18px] rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" id="logoutButton">Wyloguj się</button>`);
   document.querySelector('#logoutButton').addEventListener('click', () => logout());
 }
@@ -1260,6 +1579,7 @@ async function boot() {
       if (latest) currentUser = { name: latest.name, classroom: latest.classroom, role: latest.role || 'student', childClasses: latest.childClasses || [], graduated: latest.graduated || false, graduatedAt: latest.graduatedAt || null };
       state.viewingClassroom = accessibleClasses(currentUser)[0];
       document.querySelector('#loginLayer').classList.add('hidden');
+      if (latest) applyAccountSettings(latest.settings);
       setupUserInterface();
     } else {
       logout('Twoje konto zostało usunięte przez administratora.');
@@ -1269,8 +1589,9 @@ async function boot() {
   renderSubjects();
   renderAnnouncements();
   renderSchedule();
+  renderNotifications();
   show('home');
-  setInterval(renderSchedule, 60000);
+  setInterval(() => { renderSchedule(); renderDashboard(); }, 60000);
 
   runSchoolYearRollover().catch((err) => console.error('Nie udało się przeprowadzić rocznej promocji klas', err));
 }

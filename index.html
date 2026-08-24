@@ -34,18 +34,54 @@
         <span class="grid h-[42px] w-[42px] place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-500 text-white shadow-[0_8px_18px_#4f46e540]">✦</span>
         MY SCHOOL
       </button>
-      <nav class="relative flex gap-1 rounded-2xl border border-line bg-card p-1 shadow-[0_4px_15px_var(--shadow)]" id="mainNav" aria-label="Menu">
-        <span class="absolute rounded-[10px] bg-primary transition-all duration-300 ease-out" id="navPill"></span>
-        <button class="relative z-10 rounded-[10px] px-3 py-2 font-bold text-white" data-view="home">Główne</button>
-        <button class="relative z-10 rounded-[10px] px-3 py-2 font-bold text-muted" data-view="competences">Kompetencje</button>
-        <button class="relative z-10 rounded-[10px] px-3 py-2 font-bold text-muted" data-view="settings">Ustawienia</button>
-      </nav>
+      <div class="flex flex-wrap items-center justify-end gap-3">
+        <nav class="relative flex gap-1 rounded-2xl border border-line bg-card p-1 shadow-[0_4px_15px_var(--shadow)]" id="mainNav" aria-label="Menu">
+          <span class="absolute rounded-[10px] bg-primary transition-all duration-300 ease-out" id="navPill"></span>
+          <button class="relative z-10 rounded-[10px] px-3 py-2 font-bold text-white" data-view="home">Główne</button>
+          <button class="relative z-10 rounded-[10px] px-3 py-2 font-bold text-muted" data-view="competences">Kompetencje</button>
+          <button class="relative z-10 rounded-[10px] px-3 py-2 font-bold text-muted" data-view="settings">Ustawienia</button>
+        </nav>
+        <div class="relative hidden" id="notifWrap">
+          <button class="relative grid h-11 w-11 place-items-center rounded-2xl border border-line bg-card text-lg shadow-[0_4px_15px_var(--shadow)]" id="notifBell" aria-haspopup="true" aria-expanded="false" aria-label="Powiadomienia">
+            🔔
+            <span class="pointer-events-none absolute -right-1 -top-1 hidden min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-extrabold leading-[18px] text-white" id="notifBadge">0</span>
+          </button>
+          <div class="absolute right-0 top-[calc(100%+8px)] z-30 hidden w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-line bg-card text-ink shadow-[0_20px_50px_var(--shadow)]" id="notifPanel">
+            <div class="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
+              <h2 class="font-bold">Powiadomienia</h2>
+              <button class="rounded-lg bg-app px-2.5 py-1.5 text-xs font-bold text-primary" id="notifMarkAllRead">Oznacz wszystkie jako przeczytane</button>
+            </div>
+            <div class="grid max-h-[60vh] gap-1.5 overflow-y-auto p-2.5" id="notifList"></div>
+          </div>
+        </div>
+      </div>
     </header>
 
     <section class="view" id="home">
       <h1 class="mb-1.5 text-[clamp(1.7em,4vw,2.5em)] font-extrabold leading-[1.08] tracking-tight">Dzień dobry!</h1>
       <p class="mb-6 text-muted">Wybierz, co chcesz teraz sprawdzić.</p>
       <div class="mb-6 hidden rounded-2xl border-l-[5px] border-amber-500 bg-amber-50 px-5 py-4 text-amber-900" id="graduatedNotice"></div>
+
+      <div class="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-[1.3fr_1fr]" id="dashboardTop">
+        <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" id="nextLessonCard">
+          <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-muted">Najbliższa lekcja</h2>
+          <div id="nextLessonBody"></div>
+        </div>
+        <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" id="todaySummaryCard">
+          <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-muted">Dzisiejszy dzień</h2>
+          <div id="todaySummaryBody"></div>
+        </div>
+      </div>
+
+      <div class="mb-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" id="upcomingEventsCard">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <h2 class="text-sm font-bold uppercase tracking-wide text-muted">Nadchodzące wydarzenia</h2>
+          <button class="text-sm font-bold text-primary" data-open="events">Zobacz wszystkie →</button>
+        </div>
+        <div class="grid gap-2" id="upcomingEventsBody"></div>
+      </div>
+
+      <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-muted">Szybkie akcje</h2>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2" id="homeGrid">
         <button class="group relative min-h-[220px] overflow-hidden rounded-[25px] p-7 text-left text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" style="background:linear-gradient(135deg,#2563eb,#0ea5e9)" data-open="schedule">
           <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
@@ -64,6 +100,12 @@
           <span class="relative grid h-[52px] w-[52px] place-items-center rounded-2xl bg-white/15 text-2xl">★</span>
           <h2 class="relative mt-12 text-[1.55em] font-bold tracking-tight">Wydarzenia</h2>
           <p class="relative mt-1.5 text-white/85">Ogłoszenia i szkolne plakaty</p>
+        </button>
+        <button class="group relative min-h-[220px] overflow-hidden rounded-[25px] p-7 text-left text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" style="background:linear-gradient(135deg,#0d9488,#14b8a6)" data-open="settings">
+          <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
+          <span class="relative grid h-[52px] w-[52px] place-items-center rounded-2xl bg-white/15 text-2xl">⚙</span>
+          <h2 class="relative mt-12 text-[1.55em] font-bold tracking-tight">Ustawienia</h2>
+          <p class="relative mt-1.5 text-white/85">Dopasuj wygląd aplikacji</p>
         </button>
       </div>
     </section>
@@ -158,7 +200,7 @@
             </div>
           </div>
         </div>
-        <div class="grid grid-cols-1 items-center gap-5 py-[18px] sm:grid-cols-[1fr_auto]">
+        <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
           <div><h2 class="text-[1.2em] font-bold tracking-tight">Tło z uśmieszkami</h2><p class="mt-1 text-sm text-muted">Dodaj delikatny wzór do wybranego tła.</p></div>
           <div class="flex flex-wrap gap-2">
             <button class="h-[34px] w-[49px] rounded-[10px] border border-line bg-app p-0" data-pattern="none" aria-label="Bez wzoru"></button>
@@ -166,6 +208,32 @@
             <button class="heart-bg h-[34px] w-[49px] rounded-[10px] border border-line p-0" data-pattern="heart" aria-label="Różowe serca"></button>
             <button class="star-bg h-[34px] w-[49px] rounded-[10px] border border-line p-0" data-pattern="star" aria-label="Zielone gwiazdki"></button>
             <button class="panda-bg h-[34px] w-[49px] rounded-[10px] border border-line p-0" data-pattern="panda" aria-label="Małe pandy"></button>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Animacje</h2><p class="mt-1 text-sm text-muted">Włącz lub wyłącz animacje i przejścia w aplikacji.</p></div>
+          <div class="flex gap-2">
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-animations="on">Włączone</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-animations="off">Wyłączone</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Wygląd kart</h2><p class="mt-1 text-sm text-muted">Zmienia zaokrąglenie rogów kart w aplikacji.</p></div>
+          <div class="flex gap-2">
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-radius="small">Małe</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-radius="medium">Średnie</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-radius="large">Duże</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 items-center gap-5 py-[18px] sm:grid-cols-[1fr_auto]">
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Kolor akcentu</h2><p class="mt-1 text-sm text-muted">Wybierz główny kolor przycisków i akcentów.</p></div>
+          <div class="flex flex-wrap gap-2" id="accentColors">
+            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#4f46e5" data-accent="#4f46e5" aria-label="Indygo"></button>
+            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#0ea5e9" data-accent="#0ea5e9" aria-label="Niebieski"></button>
+            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#16a34a" data-accent="#16a34a" aria-label="Zielony"></button>
+            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#e11d48" data-accent="#e11d48" aria-label="Różowy"></button>
+            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#f97316" data-accent="#f97316" aria-label="Pomarańczowy"></button>
+            <button class="h-[30px] w-[30px] rounded-full border-2 border-transparent p-0" style="background:#0d9488" data-accent="#0d9488" aria-label="Morski"></button>
           </div>
         </div>
       </div>

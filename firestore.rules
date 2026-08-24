@@ -1,0 +1,107 @@
+// Moja Szkoła — Firestore Security Rules (DRAFT, not yet applied)
+//
+// WHY THIS FILE EXISTS
+// The project's current rules (set directly in the Firebase console, not from a file)
+// are just:
+//   match /accounts/{accountId} { allow read, write: if request.auth != null; }
+//   match /store/{docId}        { allow read, write: if request.auth != null; }
+// Every visitor signs in anonymously (signInAnonymously) before ever logging into the
+// app, so "request.auth != null" is true for literally everyone — students, parents,
+// admins, and anyone who opens the site without logging in at all. That means every
+// permission check in script.js (isAdmin(), isParent(), etc.) is a FRONTEND-ONLY
+// convenience: it stops the normal app UI from letting a student click an admin
+// button, but it does NOT stop someone who opens the browser console (or calls the
+// Firestore REST API directly) from writing anything to any document — granting
+// themselves admin, editing another class's data, deleting events, etc. That is a
+// real gap against "nie ufaj wartościom przesyłanym przez frontend".
+//
+// WHAT THIS DRAFT ADDS
+// script.js now writes two extra things on every successful login/registration:
+//   1. accounts/{id}.authUids — the last few Firebase Anonymous Auth UIDs (one per
+//      browser/device) that have successfully logged into that account.
+//   2. uidAccount/{uid} -> { accountId } — a reverse lookup so a rule can find "which
+//      account does this request's auth UID belong to" without a query (Firestore
+//      rules can only do direct get()/exists() on a known path, not queries).
+// With that in place, rules below can check "is this write coming from a device that
+// is actually logged into this account, or from the admin account" server-side,
+// instead of trusting the app.
+//
+// WHAT THIS DRAFT STILL CANNOT COVER
+// subjectsByClass / lessonsByClass / starterSubjectsByGrade / announcements /
+// notifications are each ONE Firestore document holding an array (per the comment at
+// the top of script.js) — deliberately, since that's what lets the whole class's data
+// sync live with one onSnapshot listener. Firestore rules validate a document as a
+// whole; they cannot see inside a JSON array and say "this element belongs to class
+// 7B, that one to 3A" or "this student is allowed to add competences but not delete
+// admin-added ones". Enforcing THAT server-side would need a data model change (one
+// Firestore document per lesson/subject/announcement, like accounts already is) —
+// worth doing eventually, out of scope for this pass. Until then, "store/*" writes
+// below are only gated on "is logged in", same as today.
+//
+// BEFORE PUBLISHING THIS
+// 1. Open Firebase console → Firestore → Rules → and use the "Rules Playground" /
+//    simulator to test both an allowed case (e.g. a student updating their own
+//    account's `settings`) and a blocked case (e.g. a request with no matching
+//    uidAccount entry trying to set `admin: true`) against THIS text before
+//    publishing it for real.
+// 2. Keep a copy of the current live rules (console → Rules → history) so you can
+//    roll back instantly if something you rely on breaks.
+// 3. tpraglowski's account must already have `admin: true` in its Firestore document
+//    for the admin checks below to recognise it — the app also hardcodes the
+//    username as a fallback client-side, but these rules only look at the `admin`
+//    field, since rules can't read script.js.
+// 4. This file is not wired to any deploy step (no Firebase CLI project is configured
+//    here) — publishing it means pasting it into the Firebase console yourself.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function myAccountId() {
+      return get(/databases/$(database)/documents/uidAccount/$(request.auth.uid)).data.accountId;
+    }
+    function myAccount() {
+      return get(/databases/$(database)/documents/accounts/$(myAccountId())).data;
+    }
+    function isMe(accountId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/uidAccount/$(request.auth.uid)) && myAccountId() == accountId;
+    }
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/uidAccount/$(request.auth.uid)) && myAccount().admin == true;
+    }
+    function changedFields() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    match /uidAccount/{uid} {
+      // Only the owning device writes its own reverse-lookup entry; nobody needs to
+      // read this collection directly (rules read it internally via get()).
+      allow read: if false;
+      allow write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /accounts/{accountId} {
+      allow read: if isSignedIn();
+      // Registration: anyone signed in (anonymously) may create their own account,
+      // but cannot hand themselves admin on the way in.
+      allow create: if isSignedIn() && request.resource.data.admin != true;
+      // Update: either it's your own account (any device you've logged into) or
+      // you're an admin — and only an admin may change the `admin` or `role` fields
+      // (a student editing their own `settings`/`notifReadIds` is fine either way).
+      allow update: if isSignedIn() && (isMe(accountId) || isAdmin())
+        && (isAdmin() || !changedFields().hasAny(['admin', 'role']));
+      allow delete: if isAdmin();
+    }
+
+    match /store/{docId} {
+      // Unchanged from today: any logged-in user may read/write the shared
+      // subjects/lessons/announcements/notifications documents. See "WHAT THIS DRAFT
+      // STILL CANNOT COVER" above for why per-class/per-role enforcement isn't
+      // possible at this granularity yet.
+      allow read, write: if isSignedIn();
+    }
+  }
+}
