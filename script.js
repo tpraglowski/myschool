@@ -378,6 +378,7 @@ function renderCompetences() {
   bindCards(el);
   const canAddCompetence = !isParent() && (isAdmin() || subject.addedBy !== 'admin');
   document.querySelector('#addCompetence').classList.toggle('hidden', !canAddCompetence);
+  document.querySelector('#competenceNotice').classList.toggle('hidden', isParent());
 }
 
 function emptyState(title, text) {
