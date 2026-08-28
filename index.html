@@ -308,6 +308,16 @@
       <div class="my-[14px] grid gap-[7px]" id="gradientField">
         <label class="text-[.93em] font-bold">Kolor gradientu</label>
         <div class="flex flex-wrap gap-[9px]" id="gradientPicker"></div>
+        <div class="mt-[9px] hidden grid gap-[9px] rounded-[11px] border border-dashed border-line p-[11px]" id="customGradientField">
+          <div class="flex items-center gap-2.5">
+            <input class="h-9 w-9 cursor-pointer rounded-lg border border-line p-0" id="gradientCustomColor" type="color" value="#4f46e5" aria-label="Własny kolor (RGB)" />
+            <span class="text-[.85em] text-muted">Wybierz dowolny kolor</span>
+          </div>
+          <div class="hidden grid gap-[7px]" id="existingGradientField">
+            <span class="text-[.85em] text-muted">Lub wybierz z już użytych kolorów</span>
+            <div class="flex flex-wrap gap-[9px]" id="existingGradientPicker"></div>
+          </div>
+        </div>
       </div>
       <div class="my-[14px] hidden grid gap-[7px]" id="descriptionField">
         <label class="text-[.93em] font-bold" for="itemDescription">Treść ogłoszenia</label>

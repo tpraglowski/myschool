@@ -493,15 +493,60 @@ subjectColorDialog.addEventListener('close', () => {
 // ---------- Subject / competence / announcement editor dialog ----------
 const dialog = document.querySelector('#editor');
 
+// Lightens/darkens a hex color by a flat per-channel amount (clamped), used to turn a
+// single RGB pick into a two-stop gradient matching the rest of the app's card style.
+function shadeHex(hex, amount) {
+  const num = parseInt(hex.slice(1), 16);
+  const clamp = (v) => Math.min(255, Math.max(0, v));
+  const r = clamp((num >> 16) + amount);
+  const g = clamp(((num >> 8) & 0xff) + amount);
+  const b = clamp((num & 0xff) + amount);
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+const gradientFromColor = (hex) => `linear-gradient(135deg,${shadeHex(hex, 30)},${shadeHex(hex, -30)})`;
+
+// Gradients someone has already picked (via the custom color picker below) on any
+// subject, across every class and the starter templates — so a custom color, once
+// used, can be reused elsewhere without re-picking the exact same RGB value again.
+function usedCustomGradients() {
+  const found = new Set();
+  Object.values(state.subjectsByClass).forEach((list) => list.forEach((s) => { if (s.gradient && !gradients.includes(s.gradient)) found.add(s.gradient); }));
+  Object.values(state.starterSubjectsByGrade).forEach((list) => list.forEach((s) => { if (s.gradient && !gradients.includes(s.gradient)) found.add(s.gradient); }));
+  return [...found].slice(0, 12);
+}
+
 function renderPicker() {
-  document.querySelector('#gradientPicker').innerHTML = gradients.map((g, i) =>
+  const isCustom = !gradients.includes(state.chosenGradient);
+  const presetsHtml = gradients.map((g, i) =>
     `<button type="button" class="h-8 w-[43px] rounded-lg${g === state.chosenGradient ? ' ring-2 ring-ink' : ''}" style="background:${g}" data-gradient="${i}" aria-label="Gradient ${i + 1}"></button>`
   ).join('');
+  const customSwatchHtml = isCustom
+    ? `<button type="button" class="h-8 w-[43px] rounded-lg ring-2 ring-ink" style="background:${state.chosenGradient}" aria-label="Wybrany własny kolor" disabled></button>`
+    : '';
+  document.querySelector('#gradientPicker').innerHTML = presetsHtml + customSwatchHtml
+    + `<button type="button" class="grid h-8 w-[43px] place-items-center rounded-lg border border-dashed border-line text-lg font-bold leading-none text-muted" id="moreColorsBtn" title="Więcej kolorów" aria-label="Więcej kolorów">+</button>`;
   document.querySelectorAll('[data-gradient]').forEach((b) => b.addEventListener('click', () => {
     state.chosenGradient = gradients[b.dataset.gradient];
     renderPicker();
   }));
+  document.querySelector('#moreColorsBtn').addEventListener('click', () => {
+    document.querySelector('#customGradientField').classList.toggle('hidden');
+  });
+
+  const existing = usedCustomGradients();
+  document.querySelector('#existingGradientField').classList.toggle('hidden', !existing.length);
+  document.querySelector('#existingGradientPicker').innerHTML = existing.map((g) =>
+    `<button type="button" class="h-8 w-[43px] rounded-lg${g === state.chosenGradient ? ' ring-2 ring-ink' : ''}" style="background:${g}" data-existing-gradient="${escapeHtml(g)}" aria-label="Użyty wcześniej kolor"></button>`
+  ).join('');
+  document.querySelectorAll('[data-existing-gradient]').forEach((b) => b.addEventListener('click', () => {
+    state.chosenGradient = b.dataset.existingGradient;
+    renderPicker();
+  }));
 }
+document.querySelector('#gradientCustomColor').addEventListener('input', (e) => {
+  state.chosenGradient = gradientFromColor(e.target.value);
+  renderPicker();
+});
 
 function refreshReplacementLessonOptions(cls) {
   const lessonSelect = document.querySelector('#announcementLesson');
