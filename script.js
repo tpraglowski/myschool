@@ -23,6 +23,21 @@ const accountDocRef = (name) => doc(db, 'accounts', normalise(name));
 
 const gradients = ['linear-gradient(135deg,#4f46e5,#8b5cf6)', 'linear-gradient(135deg,#0891b2,#22c55e)', 'linear-gradient(135deg,#ea580c,#f43f5e)', 'linear-gradient(135deg,#0f766e,#0ea5e9)', 'linear-gradient(135deg,#be123c,#a855f7)', 'linear-gradient(135deg,#ca8a04,#f97316)'];
 const lessonColors = ['#4f46e5', '#0891b2', '#7c3aed', '#dc2626', '#16a34a', '#ea580c'];
+// The school's bell schedule (each lesson 45 min) — picking a "Numer lekcji" in the
+// lesson editor fills the start/end time fields from here instead of typing them by
+// hand. The fields stay editable afterwards, so this is a shortcut, not a lock.
+const bellSchedule = [
+  { number: 0, start: '08:00', end: '08:45' },
+  { number: 1, start: '09:00', end: '09:45' },
+  { number: 2, start: '10:00', end: '10:45' },
+  { number: 3, start: '10:55', end: '11:40' },
+  { number: 4, start: '11:50', end: '12:35' },
+  { number: 5, start: '12:55', end: '13:40' },
+  { number: 6, start: '14:00', end: '14:45' },
+  { number: 7, start: '14:50', end: '15:35' },
+  { number: 8, start: '15:40', end: '16:25' },
+];
+const bellPeriodOptionsHtml = '<option value="">— wpisz godziny ręcznie —</option>' + bellSchedule.map((p) => `<option value="${p.number}">${p.number}. lekcja (${p.start}–${p.end})</option>`).join('');
 
 const defaultSubjects = [
   { id: 'math', name: 'Matematyka', gradient: gradients[0], competences: [{ id: 'algebra', name: 'Algebra', gradient: gradients[4] }, { id: 'geometry', name: 'Geometria', gradient: gradients[1] }] },
@@ -648,8 +663,13 @@ function openLessonEditor(id = null, cls = viewingClass(), day = state.scheduleD
   document.querySelector('#lessonDay').value = item?.day || day;
   document.querySelector('#lessonTeacher').value = item?.teacher || '';
   document.querySelector('#lessonRoom').value = item?.room || '';
-  document.querySelector('#lessonStart').value = item?.start || '08:00';
-  document.querySelector('#lessonEnd').value = item?.end || '08:45';
+  const start = item?.start || '08:00';
+  const end = item?.end || '08:45';
+  document.querySelector('#lessonStart').value = start;
+  document.querySelector('#lessonEnd').value = end;
+  document.querySelector('#lessonPeriod').innerHTML = bellPeriodOptionsHtml;
+  const matchingPeriod = bellSchedule.find((p) => p.start === start && p.end === end);
+  document.querySelector('#lessonPeriod').value = matchingPeriod ? matchingPeriod.number : '';
   state.lessonColor = item?.color || lessonColors[0];
   renderLessonColors();
   lessonDialog.showModal();
@@ -657,6 +677,12 @@ function openLessonEditor(id = null, cls = viewingClass(), day = state.scheduleD
 }
 document.querySelector('#addLesson').addEventListener('click', () => openLessonEditor());
 document.querySelector('#cancelLesson').addEventListener('click', () => lessonDialog.close('cancel'));
+document.querySelector('#lessonPeriod').addEventListener('change', (e) => {
+  const period = bellSchedule.find((p) => String(p.number) === e.target.value);
+  if (!period) return;
+  document.querySelector('#lessonStart').value = period.start;
+  document.querySelector('#lessonEnd').value = period.end;
+});
 
 // Autofill: typing a lesson name that already exists somewhere in this SAME class's
 // schedule (any day) copies over its teacher/room/color, since it's almost always the
