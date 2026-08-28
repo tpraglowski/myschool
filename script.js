@@ -658,6 +658,22 @@ function openLessonEditor(id = null, cls = viewingClass(), day = state.scheduleD
 document.querySelector('#addLesson').addEventListener('click', () => openLessonEditor());
 document.querySelector('#cancelLesson').addEventListener('click', () => lessonDialog.close('cancel'));
 
+// Autofill: typing a lesson name that already exists somewhere in this SAME class's
+// schedule (any day) copies over its teacher/room/color, since it's almost always the
+// same recurring lesson — but never the start/end time, which genuinely differs per
+// slot. Scoped to state.lessonTargetClass (set by openLessonEditor), so it never
+// leaks another class's lesson details into this one.
+document.querySelector('#lessonName').addEventListener('input', () => {
+  const name = document.querySelector('#lessonName').value.trim();
+  if (!name || !state.lessonTargetClass) return;
+  const match = classLessons(state.lessonTargetClass).find((x) => x.id !== state.editLesson && x.name.trim().toLocaleLowerCase('pl-PL') === name.toLocaleLowerCase('pl-PL'));
+  if (!match) return;
+  document.querySelector('#lessonTeacher').value = match.teacher;
+  document.querySelector('#lessonRoom').value = match.room || '';
+  state.lessonColor = match.color;
+  renderLessonColors();
+});
+
 lessonDialog.addEventListener('close', () => {
   if (lessonDialog.returnValue !== 'save') return;
   const name = document.querySelector('#lessonName').value.trim();
