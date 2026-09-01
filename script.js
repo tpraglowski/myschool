@@ -103,7 +103,7 @@ const normalizeSubjectsByClass = (byClass) => {
 const legacyStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
 const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
 const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
-const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, ...a }));
+const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], ...a }));
 
 const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'notifications'];
 const seedValue = {
@@ -130,6 +130,7 @@ const state = {
   editAnnouncement: null,
   editLesson: null,
   lessonTargetClass: null,
+  lessonIsPersonal: false,
   viewingClassroom: null,
   scheduleDay: currentWeekday(),
   adminScheduleDay: currentWeekday(),
@@ -145,6 +146,26 @@ const saveLessonsByClass = () => setDoc(storeDoc('lessonsByClass'), { value: sta
 const saveAnnouncements = () => setDoc(storeDoc('announcements'), { value: state.announcements });
 const saveNotifications = () => setDoc(storeDoc('notifications'), { value: state.notifications });
 const classLessons = (cls) => state.lessonsByClass[cls] || (state.lessonsByClass[cls] = []);
+
+// Personal lessons (added via the regular schedule "+ Dodaj lekcję", not the admin
+// panel) live on the owning account's own Firestore doc — like settings/notifReadIds
+// already do — rather than in the shared per-class lessonsByClass array, so nobody
+// else (not other students in the class, not the admin panel's lesson table) ever
+// sees them. They're merged into the displayed schedule client-side only for the
+// logged-in owner.
+function currentAccount() {
+  return currentUser && accounts.find((a) => normalise(a.name) === normalise(currentUser.name));
+}
+function personalLessons() {
+  const account = currentAccount();
+  if (!account) return [];
+  return account.personalLessons || (account.personalLessons = []);
+}
+function savePersonalLessons() {
+  const account = currentAccount();
+  if (!account) return;
+  setDoc(accountDocRef(account.name), account);
+}
 
 function applyStoreValue(key, value) {
   if (key === 'subjectsByClass') state.subjectsByClass = normalizeSubjectsByClass(value);
@@ -351,13 +372,18 @@ const statusInfo = {
   locked: { label: 'Nieodblokowane', color: 'linear-gradient(135deg,#facc15,#f59e0b)' },
   unlocked: { label: '⚠ Zdobądź mnie!', color: 'linear-gradient(135deg,#f97316,#ef4444)' },
   known: { label: 'Umiem', color: 'linear-gradient(135deg,#2563eb,#06b6d4)' },
-  earned: { label: 'Zdobyta 👍', color: 'linear-gradient(135deg,#16a34a,#22c55e)' },
+  earned_basic: { label: 'Zdobyta — poziom podstawowy 👍', color: 'linear-gradient(135deg,#16a34a,#22c55e)' },
+  earned_advanced: { label: 'Zdobyta — poziom zaawansowany 🏆', color: 'linear-gradient(135deg,#065f46,#10b981)' },
 };
+const earnedStatuses = ['earned_basic', 'earned_advanced'];
 
 function card(item, type) {
-  const status = statusInfo[item.status || 'locked'];
+  // Older competences saved before basic/advanced levels existed just have status
+  // "earned" — treat those as the basic level rather than falling back to "locked".
+  const statusKey = item.status === 'earned' ? 'earned_basic' : (item.status || 'locked');
+  const status = statusInfo[statusKey] || statusInfo.locked;
   const background = type === 'competence' ? status.color : item.gradient;
-  const earned = type === 'subject' ? item.competences.filter((c) => c.status === 'earned').length : 0;
+  const earned = type === 'subject' ? item.competences.filter((c) => earnedStatuses.includes(c.status) || c.status === 'earned').length : 0;
   const body = type === 'subject'
     ? `Zdobyte: ${earned}/${item.competences.length}`
     : `<span class="mt-2 inline-block rounded-lg bg-white/25 px-2 py-1 text-[.78em] font-extrabold text-white">${status.label}</span>`;
@@ -448,7 +474,8 @@ let activeCompetence = null;
 function openStatusEditor(id) {
   activeCompetence = subjectsForClass(viewingClass()).find((x) => x.id === state.activeSubject).competences.find((x) => x.id === id);
   document.querySelector('#statusTitle').textContent = activeCompetence.name;
-  document.querySelector('#statusSelect').value = activeCompetence.status || 'locked';
+  const currentStatus = activeCompetence.status === 'earned' ? 'earned_basic' : (activeCompetence.status || 'locked');
+  document.querySelector('#statusSelect').value = currentStatus;
   statusDialog.showModal();
 }
 document.querySelector('#cancelStatus').addEventListener('click', () => statusDialog.close('cancel'));
@@ -698,11 +725,13 @@ function renderLessonColors() {
   }));
 }
 
-function openLessonEditor(id = null, cls = viewingClass(), day = state.scheduleDay) {
+function openLessonEditor(id = null, cls = viewingClass(), day = state.scheduleDay, personal = false) {
   state.editLesson = id;
   state.lessonTargetClass = cls;
-  const item = id ? classLessons(cls).find((x) => x.id === id) : null;
-  document.querySelector('#lessonModalTitle').textContent = item ? 'Edytuj lekcję' : 'Dodaj lekcję';
+  state.lessonIsPersonal = personal;
+  const item = id ? (personal ? personalLessons() : classLessons(cls)).find((x) => x.id === id) : null;
+  const titleBase = item ? 'Edytuj lekcję' : 'Dodaj lekcję';
+  document.querySelector('#lessonModalTitle').textContent = personal ? `${titleBase} (tylko dla Ciebie)` : titleBase;
   document.querySelector('#lessonName').value = item?.name || '';
   document.querySelector('#lessonDay').innerHTML = weekdayOptionsHtml;
   document.querySelector('#lessonDay').value = item?.day || day;
@@ -720,7 +749,7 @@ function openLessonEditor(id = null, cls = viewingClass(), day = state.scheduleD
   lessonDialog.showModal();
   setTimeout(() => document.querySelector('#lessonName').focus(), 50);
 }
-document.querySelector('#addLesson').addEventListener('click', () => openLessonEditor());
+document.querySelector('#addLesson').addEventListener('click', () => openLessonEditor(null, viewingClass(), state.scheduleDay, true));
 document.querySelector('#cancelLesson').addEventListener('click', () => lessonDialog.close('cancel'));
 document.querySelector('#lessonPeriod').addEventListener('change', (e) => {
   const period = bellSchedule.find((p) => String(p.number) === e.target.value);
@@ -729,15 +758,17 @@ document.querySelector('#lessonPeriod').addEventListener('change', (e) => {
   document.querySelector('#lessonEnd').value = period.end;
 });
 
-// Autofill: typing a lesson name that already exists somewhere in this SAME class's
-// schedule (any day) copies over its teacher/room/color, since it's almost always the
-// same recurring lesson — but never the start/end time, which genuinely differs per
-// slot. Scoped to state.lessonTargetClass (set by openLessonEditor), so it never
-// leaks another class's lesson details into this one.
+// Autofill: typing a lesson name that already exists somewhere in the same lesson
+// list (the class's shared schedule when adding via the admin panel, or your own
+// personal lessons when adding via the regular calendar) copies over its
+// teacher/room/color, since it's almost always the same recurring lesson — but never
+// the start/end time, which genuinely differs per slot. Never crosses between the two
+// lists, so a personal lesson can't leak details into (or from) the shared one.
 document.querySelector('#lessonName').addEventListener('input', () => {
   const name = document.querySelector('#lessonName').value.trim();
   if (!name || !state.lessonTargetClass) return;
-  const match = classLessons(state.lessonTargetClass).find((x) => x.id !== state.editLesson && x.name.trim().toLocaleLowerCase('pl-PL') === name.toLocaleLowerCase('pl-PL'));
+  const source = state.lessonIsPersonal ? personalLessons() : classLessons(state.lessonTargetClass);
+  const match = source.find((x) => x.id !== state.editLesson && x.name.trim().toLocaleLowerCase('pl-PL') === name.toLocaleLowerCase('pl-PL'));
   if (!match) return;
   document.querySelector('#lessonTeacher').value = match.teacher;
   document.querySelector('#lessonRoom').value = match.room || '';
@@ -754,6 +785,23 @@ lessonDialog.addEventListener('close', () => {
   const start = document.querySelector('#lessonStart').value;
   const end = document.querySelector('#lessonEnd').value;
   if (!name || !day || !teacher || !start || !end || start >= end) return;
+
+  if (state.lessonIsPersonal) {
+    // Personal lesson: saved only on your own account doc, never the shared class
+    // schedule — no one else (not classmates, not the admin panel) ever sees it, so
+    // no class-wide notification is pushed for it either.
+    const lessons = personalLessons();
+    if (state.editLesson) {
+      Object.assign(lessons.find((x) => x.id === state.editLesson), { name, day, teacher, room, start, end, color: state.lessonColor });
+    } else {
+      lessons.push({ id: crypto.randomUUID(), name, day, teacher, room, start, end, color: state.lessonColor });
+    }
+    savePersonalLessons();
+    renderSchedule();
+    renderDashboard();
+    return;
+  }
+
   const lessons = classLessons(state.lessonTargetClass);
   if (state.editLesson) {
     Object.assign(lessons.find((x) => x.id === state.editLesson), { name, day, teacher, room, start, end, color: state.lessonColor });
@@ -802,27 +850,37 @@ function renderSchedule() {
   document.querySelector('#scheduleDayTitle').textContent = `Plan lekcji · ${weekdayLabel(state.scheduleDay)}`;
   document.querySelector('#todayDate').textContent = isToday ? now.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' }) : '';
   renderDayTabs(document.querySelector('#scheduleDayTabs'), state.scheduleDay, (day) => { state.scheduleDay = day; renderSchedule(); });
-  const lessons = classLessons(viewingClass()).filter((x) => x.day === state.scheduleDay).sort((a, b) => a.start.localeCompare(b.start));
+  const lessons = [
+    ...classLessons(viewingClass()).filter((x) => x.day === state.scheduleDay),
+    ...personalLessons().filter((x) => x.day === state.scheduleDay).map((x) => ({ ...x, personal: true })),
+  ].sort((a, b) => a.start.localeCompare(b.start));
   el.innerHTML = lessons.length ? lessons.map((x) => {
     const replacement = state.announcements.find((a) => a.lessonId === x.id && !a.pending);
     const replacementName = replacement?.title.replace(/^Zastępstwo:\s*/i, '');
     const isNow = isToday && current >= minutes(x.start) && current <= minutes(x.end);
-    const editable = x.addedBy === 'student';
+    const editable = x.addedBy === 'student' || x.personal;
     return `<div class="relative grid grid-cols-[65px_1fr_auto] items-center overflow-hidden rounded-2xl border border-line${isNow ? ' outline outline-[3px] outline-offset-2 outline-amber-400' : ''}">
       ${isNow ? `<span class="absolute inset-x-0 top-0 z-10 border-t-[3px] border-amber-400 bg-amber-100 py-[3px] pr-2 text-right text-[9px] font-black tracking-widest text-amber-800">TERAZ</span>` : ''}
       <div class="grid h-full place-items-center py-4 text-center text-[.9em] font-extrabold text-white" style="background:${x.color}">${x.start}<br><small>${x.end}</small></div>
-      <div class="px-4 py-3"><b class="block">${escapeHtml(x.name)}</b><span class="text-[.9em] text-muted">sala ${escapeHtml(x.room || '—')} · ${escapeHtml(x.teacher)}</span>${replacement ? `<span class="mt-1 inline-block rounded-lg bg-amber-100 px-2 py-1 text-[.78em] font-extrabold text-amber-800">Zastępstwo za: ${escapeHtml(replacementName)}</span>` : ''}</div>
-      ${editable ? `<div class="mr-3 flex gap-1"><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-primary" data-edit-lesson="${x.id}" aria-label="Edytuj lekcję">✎</button><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-red-600" data-delete-own-lesson="${x.id}" aria-label="Usuń lekcję">🗑</button></div>` : ''}
+      <div class="px-4 py-3"><b class="block">${escapeHtml(x.name)}</b><span class="text-[.9em] text-muted">sala ${escapeHtml(x.room || '—')} · ${escapeHtml(x.teacher)}</span>${replacement ? `<span class="mt-1 inline-block rounded-lg bg-amber-100 px-2 py-1 text-[.78em] font-extrabold text-amber-800">Zastępstwo za: ${escapeHtml(replacementName)}</span>` : ''}${x.personal ? `<span class="mt-1 inline-block rounded-lg bg-indigo-100 px-2 py-1 text-[.78em] font-extrabold text-indigo-800">🔒 Tylko dla Ciebie</span>` : ''}</div>
+      ${editable ? `<div class="mr-3 flex gap-1"><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-primary" data-edit-lesson="${x.id}" data-personal="${x.personal ? '1' : ''}" aria-label="Edytuj lekcję">✎</button><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-red-600" data-delete-own-lesson="${x.id}" data-personal="${x.personal ? '1' : ''}" aria-label="Usuń lekcję">🗑</button></div>` : ''}
     </div>`;
   }).join('') : emptyState('Brak lekcji', `Dodaj pierwszą lekcję na ${weekdayLabel(state.scheduleDay).toLowerCase()}.`);
-  el.querySelectorAll('[data-edit-lesson]').forEach((b) => b.addEventListener('click', () => openLessonEditor(b.dataset.editLesson)));
+  el.querySelectorAll('[data-edit-lesson]').forEach((b) => b.addEventListener('click', () => openLessonEditor(b.dataset.editLesson, viewingClass(), state.scheduleDay, b.dataset.personal === '1')));
   el.querySelectorAll('[data-delete-own-lesson]').forEach((b) => b.addEventListener('click', () => {
     if (!confirm('Usunąć tę lekcję ze swojego planu?')) return;
-    const lessons = classLessons(viewingClass());
-    const idx = lessons.findIndex((x) => x.id === b.dataset.deleteOwnLesson);
-    if (idx !== -1) lessons.splice(idx, 1);
-    saveLessonsByClass();
-    pushNotification({ title: 'Plan lekcji został zmieniony', text: 'Usunięto lekcję z planu.', classroom: viewingClass(), type: 'schedule' });
+    if (b.dataset.personal === '1') {
+      const lessons = personalLessons();
+      const idx = lessons.findIndex((x) => x.id === b.dataset.deleteOwnLesson);
+      if (idx !== -1) lessons.splice(idx, 1);
+      savePersonalLessons();
+    } else {
+      const lessons = classLessons(viewingClass());
+      const idx = lessons.findIndex((x) => x.id === b.dataset.deleteOwnLesson);
+      if (idx !== -1) lessons.splice(idx, 1);
+      saveLessonsByClass();
+      pushNotification({ title: 'Plan lekcji został zmieniony', text: 'Usunięto lekcję z planu.', classroom: viewingClass(), type: 'schedule' });
+    }
     renderSchedule();
     renderDashboard();
   }));
@@ -838,7 +896,10 @@ function pluralLessons(n) {
 function todayLessonsSorted() {
   const cls = viewingClass();
   if (!cls) return [];
-  return classLessons(cls).filter((x) => x.day === currentWeekday()).sort((a, b) => a.start.localeCompare(b.start));
+  return [
+    ...classLessons(cls).filter((x) => x.day === currentWeekday()),
+    ...personalLessons().filter((x) => x.day === currentWeekday()),
+  ].sort((a, b) => a.start.localeCompare(b.start));
 }
 function lessonRowHtml(x) {
   const replacement = state.announcements.find((a) => a.lessonId === x.id && !a.pending);
