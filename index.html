@@ -425,6 +425,16 @@
       <div class="my-[14px] grid gap-[7px]">
         <label class="text-[.93em] font-bold">Kolor lekcji</label>
         <div class="flex flex-wrap gap-[9px]" id="lessonColorPicker"></div>
+        <div class="mt-[9px] hidden grid gap-[9px] rounded-[11px] border border-dashed border-line p-[11px]" id="customLessonColorField">
+          <div class="flex items-center gap-2.5">
+            <input class="h-9 w-9 cursor-pointer rounded-lg border border-line p-0" id="lessonCustomColor" type="color" value="#4f46e5" aria-label="Własny kolor (RGB)" />
+            <span class="text-[.85em] text-muted">Wybierz dowolny kolor</span>
+          </div>
+          <div class="hidden grid gap-[7px]" id="existingLessonColorField">
+            <span class="text-[.85em] text-muted">Lub wybierz z już użytych kolorów</span>
+            <div class="flex flex-wrap gap-[9px]" id="existingLessonColorPicker"></div>
+          </div>
+        </div>
       </div>
       <div class="mt-[21px] flex justify-end gap-[9px]">
         <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelLesson">Anuluj</button>

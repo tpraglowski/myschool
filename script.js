@@ -715,15 +715,48 @@ dialog.addEventListener('close', () => {
 // ---------- Lesson schedule ----------
 const lessonDialog = document.querySelector('#lessonEditor');
 
+// Colors someone has already used (via the custom color picker below) on any lesson —
+// shared class lessons across every class, plus your own personal ones — so a custom
+// color, once used, can be reused elsewhere without re-picking the exact RGB again.
+function usedLessonColors() {
+  const found = new Set();
+  Object.values(state.lessonsByClass).forEach((list) => list.forEach((l) => { if (l.color && !lessonColors.includes(l.color)) found.add(l.color); }));
+  personalLessons().forEach((l) => { if (l.color && !lessonColors.includes(l.color)) found.add(l.color); });
+  return [...found].slice(0, 12);
+}
+
 function renderLessonColors() {
-  document.querySelector('#lessonColorPicker').innerHTML = lessonColors.map((c) =>
+  const isCustom = !lessonColors.includes(state.lessonColor);
+  const presetsHtml = lessonColors.map((c) =>
     `<button type="button" class="h-8 w-[43px] rounded-lg${c === state.lessonColor ? ' ring-2 ring-ink' : ''}" style="background:${c}" data-lesson-color="${c}"></button>`
   ).join('');
+  const customSwatchHtml = isCustom
+    ? `<button type="button" class="h-8 w-[43px] rounded-lg ring-2 ring-ink" style="background:${state.lessonColor}" aria-label="Wybrany własny kolor" disabled></button>`
+    : '';
+  document.querySelector('#lessonColorPicker').innerHTML = presetsHtml + customSwatchHtml
+    + `<button type="button" class="grid h-8 w-[43px] place-items-center rounded-lg border border-dashed border-line text-lg font-bold leading-none text-muted" id="moreLessonColorsBtn" title="Więcej kolorów" aria-label="Więcej kolorów">+</button>`;
   document.querySelectorAll('[data-lesson-color]').forEach((b) => b.addEventListener('click', () => {
     state.lessonColor = b.dataset.lessonColor;
     renderLessonColors();
   }));
+  document.querySelector('#moreLessonColorsBtn').addEventListener('click', () => {
+    document.querySelector('#customLessonColorField').classList.toggle('hidden');
+  });
+
+  const existing = usedLessonColors();
+  document.querySelector('#existingLessonColorField').classList.toggle('hidden', !existing.length);
+  document.querySelector('#existingLessonColorPicker').innerHTML = existing.map((c) =>
+    `<button type="button" class="h-8 w-[43px] rounded-lg${c === state.lessonColor ? ' ring-2 ring-ink' : ''}" style="background:${c}" data-existing-lesson-color="${escapeHtml(c)}" aria-label="Użyty wcześniej kolor"></button>`
+  ).join('');
+  document.querySelectorAll('[data-existing-lesson-color]').forEach((b) => b.addEventListener('click', () => {
+    state.lessonColor = b.dataset.existingLessonColor;
+    renderLessonColors();
+  }));
 }
+document.querySelector('#lessonCustomColor').addEventListener('input', (e) => {
+  state.lessonColor = e.target.value;
+  renderLessonColors();
+});
 
 function openLessonEditor(id = null, cls = viewingClass(), day = state.scheduleDay, personal = false) {
   state.editLesson = id;
