@@ -30,10 +30,13 @@
 <body class="min-h-screen bg-app font-sans text-ink transition-colors">
   <main class="mx-auto w-[calc(100%-2rem)] max-w-[1120px] pb-11 pt-7">
     <header class="mb-7 flex flex-wrap items-center justify-between gap-4">
-      <button class="flex cursor-pointer items-center gap-3 text-xl font-extrabold tracking-tight" data-view="home">
-        <span class="grid h-[42px] w-[42px] place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-500 text-white shadow-[0_8px_18px_#4f46e540]">✦</span>
-        MY SCHOOL
-      </button>
+      <div class="grid gap-1">
+        <button class="flex cursor-pointer items-center gap-3 text-xl font-extrabold tracking-tight" data-view="home">
+          <span class="grid h-[42px] w-[42px] place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-500 text-white shadow-[0_8px_18px_#4f46e540]">✦</span>
+          MY SCHOOL
+        </button>
+        <span class="hidden w-fit rounded-lg bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary" id="headerTimerIndicator"></span>
+      </div>
       <div class="flex flex-wrap items-center justify-end gap-3">
         <nav class="relative flex gap-1 rounded-2xl border border-line bg-card p-1 shadow-[0_4px_15px_var(--shadow)]" id="mainNav" aria-label="Menu">
           <span class="absolute rounded-[10px] bg-primary transition-all duration-300 ease-out" id="navPill"></span>
@@ -160,6 +163,40 @@
         <button class="self-start rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="editTeacherTools">Edytuj</button>
       </div>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-[17px]" id="teacherToolsGrid"></div>
+    </section>
+
+    <section class="view hidden" id="timerScreen">
+      <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="teacherTools">← Wróć</button>
+      <div class="h-[18px]"></div>
+      <div class="rounded-[22px] border border-line bg-card p-[22px] text-center shadow-[0_7px_22px_var(--shadow)]">
+        <input class="mx-auto mb-1 block rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-[1.2em] font-bold tracking-tight outline-primary focus:border-line focus:bg-app" id="timerScreenLabel" maxlength="40" placeholder="Timer" />
+        <div class="my-8 text-[clamp(3em,12vw,5.5em)] font-black tabular-nums" id="timerScreenDisplay">5:00</div>
+        <div class="mb-7 flex justify-center gap-3">
+          <button class="rounded-xl bg-primary px-6 py-3 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="timerScreenToggle">Start</button>
+          <button class="rounded-xl bg-app px-6 py-3 font-extrabold text-muted" id="timerScreenReset">Reset</button>
+        </div>
+        <div class="mx-auto max-w-[420px] rounded-2xl border border-line p-4 text-left">
+          <h3 class="mb-3 text-sm font-bold uppercase tracking-wide text-muted">Ustaw czas</h3>
+          <div class="mb-4 flex flex-wrap gap-2" id="timerPresets"></div>
+          <div class="flex flex-wrap items-end justify-center gap-2">
+            <div class="grid gap-1 text-center">
+              <label class="text-xs text-muted" for="timerHours">Godz.</label>
+              <input class="w-14 rounded-lg border border-line bg-app px-2 py-1.5 text-center" id="timerHours" type="number" min="0" max="23" value="0" />
+            </div>
+            <span class="pb-1.5 font-bold">:</span>
+            <div class="grid gap-1 text-center">
+              <label class="text-xs text-muted" for="timerMinutes">Min.</label>
+              <input class="w-14 rounded-lg border border-line bg-app px-2 py-1.5 text-center" id="timerMinutes" type="number" min="0" max="59" value="5" />
+            </div>
+            <span class="pb-1.5 font-bold">:</span>
+            <div class="grid gap-1 text-center">
+              <label class="text-xs text-muted" for="timerSeconds">Sek.</label>
+              <input class="w-14 rounded-lg border border-line bg-app px-2 py-1.5 text-center" id="timerSeconds" type="number" min="0" max="59" value="0" />
+            </div>
+            <button class="rounded-lg bg-primary px-3 py-[9px] font-extrabold text-white" id="timerSetCustom">Ustaw</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="view hidden" id="detail">
