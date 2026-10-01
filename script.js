@@ -103,7 +103,7 @@ const normalizeSubjectsByClass = (byClass) => {
 const legacyStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
 const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
 const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
-const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], ...a }));
+const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], adminNote: '', ...a }));
 
 const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'notifications'];
 const seedValue = {
@@ -309,8 +309,14 @@ async function loadStore() {
 function watchStoreLive() {
   onSnapshot(accountsCollection, (snap) => {
     accounts = normalizeAccounts(snap.docs.map((d) => d.data()));
-    renderAccounts();
-    renderPendingTeachers();
+    // Account data — especially admin-only notes — must only ever be rendered into
+    // the DOM for an actual admin; every other connected client (any student/parent
+    // tab currently open) would otherwise get the full account list, notes included,
+    // written into its own hidden DOM just because some admin edited an account.
+    if (isAdmin()) {
+      renderAccounts();
+      renderPendingTeachers();
+    }
     if (currentUser && !accountStillExists(currentUser)) logout('Twoje konto zostało usunięte przez administratora.');
   });
   STORE_KEYS.forEach((key) => onSnapshot(storeDoc(key), (snap) => {
@@ -1437,6 +1443,13 @@ function logout(message) {
   document.querySelector('#logoutButton')?.remove();
   document.querySelector('#notifPanel').classList.add('hidden');
   renderNotifications();
+  // Admin-only content (notably per-account notes) must not linger in the DOM for
+  // whoever logs into this same browser next — the admin section stays mounted
+  // (just hidden) between logins, so its rendered lists need clearing explicitly.
+  ['#accountList', '#pendingTeachers', '#pendingReplacements', '#adminLessonTable', '#starterSubjectList'].forEach((sel) => {
+    const el = document.querySelector(sel);
+    if (el) el.innerHTML = '';
+  });
   document.querySelector('#loginLayer').classList.remove('hidden');
   screen('startScreen');
   show('home');
@@ -1509,6 +1522,24 @@ document.querySelector('#loginForm').addEventListener('submit', async (e) => {
   finishLogin(user);
 });
 
+// Account list is admin-only and can grow long, so it's collapsible — state is a
+// per-device UI preference (not synced to the account like settings are).
+const accountListWrap = document.querySelector('#accountListWrap');
+const toggleAccountListBtn = document.querySelector('#toggleAccountList');
+let accountListCollapsed = localStorage.getItem('schoolAccountListCollapsed') === '1';
+function applyAccountListCollapse() {
+  accountListWrap.classList.toggle('grid-rows-[0fr]', accountListCollapsed);
+  accountListWrap.classList.toggle('grid-rows-[1fr]', !accountListCollapsed);
+  toggleAccountListBtn.textContent = accountListCollapsed ? '▸' : '▾';
+  toggleAccountListBtn.setAttribute('aria-expanded', String(!accountListCollapsed));
+}
+applyAccountListCollapse();
+toggleAccountListBtn.addEventListener('click', () => {
+  accountListCollapsed = !accountListCollapsed;
+  localStorage.setItem('schoolAccountListCollapsed', accountListCollapsed ? '1' : '0');
+  applyAccountListCollapse();
+});
+
 function renderAccounts() {
   const el = document.querySelector('#accountList');
   const approved = accounts.filter((a) => !(a.role === 'teacher' && a.pending));
@@ -1518,6 +1549,7 @@ function renderAccounts() {
         <div>
           <b class="block">${escapeHtml(a.name)}${a.role === 'student' ? ` · klasa ${a.classroom}` : ''}</b>
           <span class="text-[.9em] text-amber-800">${roleLabel(a)}</span>
+          ${a.adminNote ? `<span class="mt-1 block max-w-[320px] text-[.85em] italic text-amber-700">📝 ${escapeHtml(a.adminNote)}</span>` : ''}
         </div>
         <div class="flex shrink-0 gap-1.5">
           <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-amber-800" data-edit-account="${escapeHtml(a.name)}">Edytuj</button>
@@ -1606,6 +1638,7 @@ function openAccountEditor(name) {
   editAccountRole.value = account.role || 'student';
   editAccountClass.value = account.classroom || classCodes[0];
   [...editAccountChildClasses.options].forEach((o) => { o.selected = (account.childClasses || []).includes(o.value); });
+  document.querySelector('#editAccountNote').value = account.adminNote || '';
   updateEditAccountFields();
   accountEditorDialog.showModal();
 }
@@ -1622,8 +1655,9 @@ accountEditorDialog.addEventListener('close', () => {
   const childClasses = role === 'parent' ? [...editAccountChildClasses.selectedOptions].map((o) => o.value) : [];
   if (role === 'parent' && (!childClasses.length || childClasses.length > 5)) return alert('Wybierz od 1 do 5 klas dziecka.');
   const classroom = role === 'student' ? editAccountClass.value : role === 'parent' ? childClasses[0] : null;
+  const adminNote = document.querySelector('#editAccountNote').value.trim();
   const original = accounts.find((a) => normalise(a.name) === normalise(oldName));
-  const updated = { ...original, name: newName, role, classroom, childClasses, pending: false };
+  const updated = { ...original, name: newName, role, classroom, childClasses, pending: false, adminNote };
   accounts = accounts.map((a) => (normalise(a.name) === normalise(oldName) ? updated : a));
   if (nameChanged) deleteDoc(accountDocRef(oldName));
   setDoc(accountDocRef(newName), updated);

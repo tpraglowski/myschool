@@ -240,9 +240,16 @@
       <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
         <div class="mb-[17px] flex items-center justify-between gap-3">
           <h2 class="text-[1.2em] font-bold tracking-tight">Panel administratora</h2>
-          <span class="text-muted">Konta bez haseł</span>
+          <div class="flex items-center gap-2.5">
+            <span class="text-muted">Konta bez haseł</span>
+            <button class="grid h-8 w-8 place-items-center rounded-lg bg-app text-lg font-bold text-muted" id="toggleAccountList" aria-label="Zwiń/rozwiń listę kont" aria-expanded="true">▾</button>
+          </div>
         </div>
-        <div class="grid gap-2.5" id="accountList"></div>
+        <div class="grid grid-rows-[1fr] overflow-hidden transition-[grid-template-rows] duration-300 ease-out" id="accountListWrap">
+          <div class="overflow-hidden">
+            <div class="grid gap-2.5" id="accountList"></div>
+          </div>
+        </div>
       </div>
       <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
         <div class="mb-[17px] flex items-center justify-between gap-3">
@@ -372,6 +379,10 @@
       <div class="my-[14px] hidden grid gap-[7px]" id="editAccountChildClassesField">
         <label class="text-[.93em] font-bold" for="editAccountChildClasses">Klasa(y) dziecka <span class="font-normal text-muted">(max. 5)</span></label>
         <select class="min-h-[160px] rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink" id="editAccountChildClasses" multiple></select>
+      </div>
+      <div class="my-[14px] grid gap-[7px]">
+        <label class="text-[.93em] font-bold" for="editAccountNote">Notatka administratora <span class="font-normal text-muted">(widoczna tylko dla Ciebie)</span></label>
+        <textarea class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="editAccountNote" maxlength="300" rows="3" placeholder="np. kontakt do rodzica, uwaga o koncie…"></textarea>
       </div>
       <div class="mt-[21px] flex justify-end gap-[9px]">
         <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelAccountEditor">Anuluj</button>
