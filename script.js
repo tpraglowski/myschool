@@ -103,7 +103,7 @@ const normalizeSubjectsByClass = (byClass) => {
 const legacyStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
 const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
 const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
-const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], adminNote: '', ...a }));
+const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], adminNote: '', teacherTools: [], ...a }));
 
 const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'notifications'];
 const seedValue = {
@@ -131,6 +131,8 @@ const state = {
   editLesson: null,
   lessonTargetClass: null,
   lessonIsPersonal: false,
+  teacherToolsEditing: false,
+  timerRuntime: {},
   viewingClassroom: null,
   scheduleDay: currentWeekday(),
   adminScheduleDay: currentWeekday(),
@@ -1447,10 +1449,12 @@ function logout(message) {
   // Admin-only content (notably per-account notes) must not linger in the DOM for
   // whoever logs into this same browser next — the admin section stays mounted
   // (just hidden) between logins, so its rendered lists need clearing explicitly.
-  ['#accountList', '#pendingTeachers', '#pendingReplacements', '#adminLessonTable', '#starterSubjectList'].forEach((sel) => {
+  ['#accountList', '#pendingTeachers', '#pendingReplacements', '#adminLessonTable', '#starterSubjectList', '#teacherToolsGrid'].forEach((sel) => {
     const el = document.querySelector(sel);
     if (el) el.innerHTML = '';
   });
+  state.timerRuntime = {};
+  state.teacherToolsEditing = false;
   document.querySelector('#loginLayer').classList.remove('hidden');
   screen('startScreen');
   show('home');
@@ -1737,6 +1741,127 @@ async function runSchoolYearRollover() {
   }
 }
 
+// ---------- Teacher tools ----------
+// Lives entirely on the teacher's own account doc (like personalLessons/settings),
+// so it's private to that teacher — no one else ever sees or syncs it. Only "timer"
+// exists as a tool type for now; the add button is built so more types can slot in
+// later without changing this shape. The countdown itself (remaining/running) is
+// local-only runtime state, never persisted — only the label/duration configuration is.
+function teacherToolsFor() {
+  const account = currentAccount();
+  if (!account) return [];
+  return account.teacherTools || (account.teacherTools = []);
+}
+function saveTeacherTools() {
+  const account = currentAccount();
+  if (!account) return;
+  setDoc(accountDocRef(account.name), account);
+}
+function formatTimer(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+function timerCardHtml(tool, editing) {
+  const runtime = state.timerRuntime[tool.id];
+  return `<div class="relative rounded-[20px] border border-line bg-card p-5 shadow-[0_7px_22px_var(--shadow)]">
+    ${editing ? `<button class="absolute right-3 top-3 rounded-lg bg-app px-2 py-1 text-sm font-bold text-red-600" data-delete-tool="${tool.id}" aria-label="Usuń narzędzie">🗑</button>` : ''}
+    <span class="mb-2 inline-block rounded-lg bg-app px-2 py-1 text-xs font-bold text-muted">⏱ TIMER</span>
+    ${editing
+      ? `<input class="mb-2 block w-full rounded-lg border border-line bg-app px-2 py-1.5 font-bold text-ink outline-primary" data-tool-label="${tool.id}" value="${escapeHtml(tool.label || '')}" placeholder="Nazwa (opcjonalnie)" maxlength="40" />`
+      : `<h3 class="mb-2 truncate font-bold">${escapeHtml(tool.label || 'Timer')}</h3>`}
+    <div class="mb-3 text-center text-[2.4em] font-black tabular-nums" data-timer-display="${tool.id}">${formatTimer(runtime.remaining)}</div>
+    ${editing ? `<div class="mb-3 flex items-center justify-center gap-2"><label class="text-sm text-muted" for="tool-minutes-${tool.id}">Minuty:</label><input class="w-16 rounded-lg border border-line bg-app px-2 py-1 text-center" id="tool-minutes-${tool.id}" type="number" min="1" max="180" data-tool-minutes="${tool.id}" value="${Math.round(tool.duration / 60)}" /></div>` : ''}
+    <div class="flex justify-center gap-2">
+      <button class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-timer-toggle="${tool.id}">${runtime.running ? 'Pauza' : 'Start'}</button>
+      <button class="rounded-lg bg-app px-3 py-2 font-extrabold text-muted" data-timer-reset="${tool.id}">Reset</button>
+    </div>
+  </div>`;
+}
+function bindTeacherToolsEvents(el) {
+  document.querySelector('#addTeacherTool')?.addEventListener('click', () => {
+    const tool = { id: crypto.randomUUID(), type: 'timer', label: '', duration: 300 };
+    teacherToolsFor().push(tool);
+    state.timerRuntime[tool.id] = { remaining: tool.duration, running: false };
+    saveTeacherTools();
+    renderTeacherTools();
+  });
+  el.querySelectorAll('[data-delete-tool]').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Usunąć to narzędzie?')) return;
+    const account = currentAccount();
+    account.teacherTools = teacherToolsFor().filter((t) => t.id !== b.dataset.deleteTool);
+    delete state.timerRuntime[b.dataset.deleteTool];
+    saveTeacherTools();
+    renderTeacherTools();
+  }));
+  el.querySelectorAll('[data-tool-label]').forEach((input) => input.addEventListener('change', () => {
+    const tool = teacherToolsFor().find((t) => t.id === input.dataset.toolLabel);
+    if (!tool) return;
+    tool.label = input.value.trim();
+    saveTeacherTools();
+  }));
+  el.querySelectorAll('[data-tool-minutes]').forEach((input) => input.addEventListener('change', () => {
+    const tool = teacherToolsFor().find((t) => t.id === input.dataset.toolMinutes);
+    if (!tool) return;
+    const minutes = Math.min(180, Math.max(1, Number(input.value) || 1));
+    tool.duration = minutes * 60;
+    state.timerRuntime[tool.id] = { remaining: tool.duration, running: false };
+    saveTeacherTools();
+    renderTeacherTools();
+  }));
+  el.querySelectorAll('[data-timer-toggle]').forEach((b) => b.addEventListener('click', () => {
+    const runtime = state.timerRuntime[b.dataset.timerToggle];
+    if (!runtime) return;
+    runtime.running = !runtime.running;
+    renderTeacherTools();
+  }));
+  el.querySelectorAll('[data-timer-reset]').forEach((b) => b.addEventListener('click', () => {
+    const tool = teacherToolsFor().find((t) => t.id === b.dataset.timerReset);
+    const runtime = state.timerRuntime[b.dataset.timerReset];
+    if (!tool || !runtime) return;
+    runtime.remaining = tool.duration;
+    runtime.running = false;
+    renderTeacherTools();
+  }));
+}
+function renderTeacherTools() {
+  if (!isTeacher()) return;
+  const tools = teacherToolsFor();
+  tools.forEach((tool) => {
+    if (!state.timerRuntime[tool.id]) state.timerRuntime[tool.id] = { remaining: tool.duration, running: false };
+  });
+  const editing = state.teacherToolsEditing;
+  document.querySelector('#editTeacherTools').textContent = editing ? 'Gotowe' : 'Edytuj';
+  const addTileHtml = editing ? `<button type="button" class="grid min-h-[172px] place-items-center rounded-[20px] border-2 border-dashed border-line text-4xl font-bold text-muted" id="addTeacherTool" aria-label="Dodaj narzędzie">+</button>` : '';
+  const el = document.querySelector('#teacherToolsGrid');
+  el.innerHTML = !tools.length && !editing
+    ? emptyState('Brak narzędzi', 'Kliknij „Edytuj”, aby dodać pierwsze narzędzie.')
+    : tools.map((tool) => timerCardHtml(tool, editing)).join('') + addTileHtml;
+  bindTeacherToolsEvents(el);
+}
+document.querySelector('#editTeacherTools').addEventListener('click', () => {
+  state.teacherToolsEditing = !state.teacherToolsEditing;
+  renderTeacherTools();
+});
+setInterval(() => {
+  let changed = false;
+  Object.values(state.timerRuntime).forEach((runtime) => {
+    if (runtime.running && runtime.remaining > 0) {
+      runtime.remaining -= 1;
+      changed = true;
+      if (runtime.remaining === 0) runtime.running = false;
+    }
+  });
+  if (!changed || document.querySelector('#teacherTools').classList.contains('hidden')) return;
+  document.querySelectorAll('[data-timer-display]').forEach((el) => {
+    const runtime = state.timerRuntime[el.dataset.timerDisplay];
+    if (runtime) el.textContent = formatTimer(runtime.remaining);
+  });
+  document.querySelectorAll('[data-timer-toggle]').forEach((b) => {
+    const runtime = state.timerRuntime[b.dataset.timerToggle];
+    if (runtime) b.textContent = runtime.running ? 'Pauza' : 'Start';
+  });
+}, 1000);
+
 function setupUserInterface() {
   document.querySelector('#homeAdmin')?.remove();
   document.querySelector('#logoutButton')?.remove();
@@ -1771,6 +1896,8 @@ function setupUserInterface() {
   document.querySelector('#addSubject').classList.toggle('hidden', isParent());
   document.querySelector('#navCompetences').classList.toggle('hidden', isTeacher());
   document.querySelector('#navTeacherTools').classList.toggle('hidden', !isTeacher());
+  state.teacherToolsEditing = false;
+  if (isTeacher()) renderTeacherTools();
   renderSubjects();
   renderSchedule();
   renderAnnouncements();
