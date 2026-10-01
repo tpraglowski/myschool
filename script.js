@@ -1388,6 +1388,7 @@ let currentUser = JSON.parse(localStorage.getItem('schoolUser') || 'null');
 const normalise = (name) => name.trim().toLocaleLowerCase('pl-PL');
 const isAdmin = () => currentUser && (normalise(currentUser.name) === 'tpraglowski' || accounts.find((x) => normalise(x.name) === normalise(currentUser.name))?.admin);
 const isParent = () => currentUser?.role === 'parent';
+const isTeacher = () => currentUser?.role === 'teacher';
 const screen = (id) => document.querySelectorAll('#startScreen,#loginForm,#registerForm').forEach((x) => x.classList.toggle('hidden', x.id !== id));
 
 // A student only ever sees their own class. A teacher can see/switch between every
@@ -1768,6 +1769,8 @@ function setupUserInterface() {
   document.querySelector('#addReplacement').textContent = isAdmin() ? '+ Dodaj zastępstwo' : '+ Zgłoś zastępstwo';
   document.querySelector('#addAnnouncement').classList.toggle('hidden', !isAdmin());
   document.querySelector('#addSubject').classList.toggle('hidden', isParent());
+  document.querySelector('#navCompetences').classList.toggle('hidden', isTeacher());
+  document.querySelector('#navTeacherTools').classList.toggle('hidden', !isTeacher());
   renderSubjects();
   renderSchedule();
   renderAnnouncements();
