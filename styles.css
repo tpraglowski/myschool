@@ -44,7 +44,7 @@ body.radius-large { --card-radius: 25px; --panel-radius: 22px; }
   75% { transform: translateY(-3%); }
   100% { transform: translateY(0); opacity: 1; }
 }
-.drop-in { animation: dropIn .5s cubic-bezier(.3, .7, .4, 1) both; }
+.drop-in { animation: dropIn .3s cubic-bezier(.3, .7, .4, 1) both; }
 
 /* "Animacje: Wyłączone" setting — turns off motion app-wide without touching layout. */
 body.no-animations,

@@ -212,10 +212,16 @@
           <p class="mt-4 text-sm text-muted" id="pickerInfo"></p>
         </div>
         <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
-          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Lista klasy</h3>
-          <textarea class="w-full rounded-xl border border-line bg-app px-3 py-2.5 text-ink outline-primary" id="pickerRoster" rows="9" placeholder="Wpisz uczniów — każdy w nowej linii (lub oddzieleni przecinkami)"></textarea>
-          <p class="mt-1 text-xs text-muted" id="pickerRosterCount"></p>
-          <div class="mt-4 flex items-center justify-between gap-2">
+          <div data-class-bar class="mb-5">
+            <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Klasa</h3>
+            <div class="flex items-center gap-2">
+              <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
+              <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę">✎</button>
+            </div>
+            <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
+          </div>
+          <div class="flex items-center justify-between gap-2">
             <h3 class="text-sm font-bold uppercase tracking-wide text-muted">Ostatnio wylosowani</h3>
             <button class="rounded-lg bg-app px-2.5 py-1.5 text-xs font-bold text-muted" id="pickerClearRecent">Wyczyść historię</button>
           </div>
@@ -229,11 +235,17 @@
       <div class="h-[18px]"></div>
       <div class="grid gap-4 lg:grid-cols-2">
         <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
-          <input class="mb-3 block w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-[1.2em] font-bold tracking-tight outline-primary focus:border-line focus:bg-app" id="groupsScreenLabel" maxlength="40" placeholder="Losowanie grup" />
-          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Lista klasy</h3>
-          <textarea class="w-full rounded-xl border border-line bg-app px-3 py-2.5 text-ink outline-primary" id="groupsRoster" rows="7" placeholder="Wpisz uczniów — każdy w nowej linii (lub oddzieleni przecinkami)"></textarea>
-          <p class="mt-1 text-xs text-muted" id="groupsRosterCount"></p>
-          <h3 class="mb-2 mt-4 text-sm font-bold uppercase tracking-wide text-muted">Podział</h3>
+          <input class="mb-4 block w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-[1.2em] font-bold tracking-tight outline-primary focus:border-line focus:bg-app" id="groupsScreenLabel" maxlength="40" placeholder="Losowanie grup" />
+          <div data-class-bar class="mb-5">
+            <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Klasa</h3>
+            <div class="flex items-center gap-2">
+              <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
+              <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę">✎</button>
+            </div>
+            <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
+          </div>
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Podział</h3>
           <div class="flex flex-wrap items-center gap-2">
             <select class="rounded-lg border border-line bg-app px-3 py-2 text-ink" id="groupsMode">
               <option value="count">Liczba grup</option>
@@ -241,14 +253,6 @@
             </select>
             <input class="w-20 rounded-lg border border-line bg-app px-2 py-2 text-center" id="groupsValue" type="number" min="1" max="30" value="2" aria-label="Wartość podziału" />
           </div>
-          <h3 class="mb-2 mt-4 text-sm font-bold uppercase tracking-wide text-muted">Nie mogą być razem</h3>
-          <div class="flex flex-wrap items-center gap-2">
-            <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-2 py-2 text-ink" id="apartA" aria-label="Pierwsza osoba"></select>
-            <span class="text-muted">✕</span>
-            <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-2 py-2 text-ink" id="apartB" aria-label="Druga osoba"></select>
-            <button class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" id="apartAdd">Dodaj</button>
-          </div>
-          <div class="mt-2 flex flex-wrap gap-2" id="apartList"></div>
         </div>
         <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
           <button class="mb-4 w-full rounded-xl bg-primary px-6 py-3 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="groupsDraw">Losuj grupy</button>
@@ -571,6 +575,36 @@
         <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" value="save">Zapisz status</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="max-h-[92dvh] w-[min(520px,calc(100%-28px))] overflow-y-auto rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="classEditor">
+    <div class="p-6">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <h2 class="text-[1.35em] font-bold">Edytuj klasę</h2>
+        <button type="button" class="rounded-lg bg-app px-2.5 py-1.5 font-bold text-muted" id="classEditorClose" aria-label="Zamknij">✕</button>
+      </div>
+      <label class="text-[.93em] font-bold" for="classNameInput">Nazwa klasy</label>
+      <div class="mb-4 mt-1.5 flex gap-2">
+        <input class="min-w-0 flex-1 rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="classNameInput" maxlength="30" />
+        <button type="button" class="rounded-lg bg-app px-3 py-2 font-bold text-red-600" id="classDeleteBtn" title="Usuń klasę" aria-label="Usuń klasę">🗑</button>
+      </div>
+      <h3 class="text-[.93em] font-bold">Uczniowie</h3>
+      <p class="mb-1.5 text-xs text-muted">Jedno imię i nazwisko w każdej linii. Wielkie litery na początku słów dodają się same.</p>
+      <textarea class="w-full rounded-[11px] border border-[#dce1ee] bg-app px-3 py-2.5 text-ink outline-primary" id="classNamesInput" rows="9" placeholder="Jan Kowalski&#10;Anna Nowak&#10;…"></textarea>
+      <p class="mt-1 text-xs text-muted" id="classNameCount">0 uczniów</p>
+      <h3 class="mt-4 text-[.93em] font-bold">Kryteria grup</h3>
+      <p class="mb-1.5 text-xs text-muted">Osoby, które nie powinny trafić do tej samej grupy przy losowaniu grup.</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-2 py-2 text-ink" id="classApartA" aria-label="Pierwsza osoba"></select>
+        <span class="text-sm text-muted">nie w grupie z</span>
+        <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-2 py-2 text-ink" id="classApartB" aria-label="Druga osoba"></select>
+        <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" id="classApartAdd" aria-label="Dodaj regułę">+</button>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-2" id="classApartList"></div>
+      <div class="mt-5 flex justify-end">
+        <button type="button" class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="classEditorDone">Zamknij</button>
+      </div>
+    </div>
   </dialog>
 
   <dialog class="m-0 h-[100dvh] max-h-none w-screen max-w-none bg-app p-0 text-ink" id="toolPicker">
