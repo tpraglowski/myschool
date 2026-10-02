@@ -1772,6 +1772,32 @@ function formatTimer(totalSeconds) {
   const sec = s % 60;
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 }
+// Every tool type the "+" picker offers. Add an entry here (plus rendering for it)
+// to make a new kind of tool available; only the timer exists so far.
+const toolTypes = [
+  { type: 'timer', icon: '⏱', name: 'Timer', description: 'Odliczanie czasu na pełnym ekranie' },
+];
+const toolPickerDialog = document.querySelector('#toolPicker');
+function openToolPicker() {
+  document.querySelector('#toolPickerList').innerHTML = toolTypes.map((t) =>
+    `<button type="button" class="flex items-center gap-3 rounded-2xl border border-line bg-app p-3.5 text-left transition hover:border-primary" data-pick-tool="${t.type}">
+      <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-card text-xl">${t.icon}</span>
+      <span><b class="block">${t.name}</b><span class="text-[.85em] text-muted">${t.description}</span></span>
+    </button>`
+  ).join('');
+  document.querySelectorAll('[data-pick-tool]').forEach((b) => b.addEventListener('click', () => {
+    addTeacherTool(b.dataset.pickTool);
+    toolPickerDialog.close();
+  }));
+  toolPickerDialog.showModal();
+}
+document.querySelector('#cancelToolPicker').addEventListener('click', () => toolPickerDialog.close());
+function addTeacherTool(type) {
+  const tool = { id: crypto.randomUUID(), type, label: '', duration: currentAccount()?.lastTimerSeconds || 300 };
+  teacherToolsFor().push(tool);
+  saveTeacherTools();
+  renderTeacherTools();
+}
 function ensureTimerRuntime(tool) {
   return state.timerRuntime[tool.id] || (state.timerRuntime[tool.id] = { remaining: tool.duration, running: false });
 }
@@ -1786,12 +1812,7 @@ function toolTileHtml(tool, editing) {
   </button>`;
 }
 function bindTeacherToolsEvents(el) {
-  document.querySelector('#addTeacherTool')?.addEventListener('click', () => {
-    const tool = { id: crypto.randomUUID(), type: 'timer', label: '', duration: currentAccount()?.lastTimerSeconds || 300 };
-    teacherToolsFor().push(tool);
-    saveTeacherTools();
-    renderTeacherTools();
-  });
+  document.querySelector('#addTeacherTool')?.addEventListener('click', openToolPicker);
   el.querySelectorAll('[data-delete-tool]').forEach((b) => {
     b.addEventListener('pointerdown', (e) => e.stopPropagation());
     b.addEventListener('click', (e) => {
