@@ -2021,7 +2021,26 @@ function openPickerScreen(id) {
   renderPickerScreen();
   show('pickerScreen');
 }
-function drawPerson() {
+// The draw animation: the result drops in from above DRAW_FALLS times in a row. The first
+// four are decoys (random names / random groupings) and the last one is the real result,
+// which is decided and saved before the animation starts. Skipped entirely when the
+// "Animacje" setting is off.
+const DRAW_FALLS = 5;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const animationsOn = () => !document.body.classList.contains('no-animations');
+let drawInProgress = false;
+function playDrop(el) {
+  el.classList.remove('drop-in');
+  void el.offsetWidth;
+  el.classList.add('drop-in');
+}
+function setDrawButton(selector, busy) {
+  const button = document.querySelector(selector);
+  button.disabled = busy;
+  button.classList.toggle('opacity-60', busy);
+}
+async function drawPerson() {
+  if (drawInProgress) return;
   const tool = activeClassTool();
   if (!tool) return;
   saveRoster(tool, document.querySelector('#pickerRoster').value);
@@ -2032,7 +2051,31 @@ function drawPerson() {
   tool.recent = [...(tool.recent || []), name].slice(-PICK_COOLDOWN);
   state.pickerResult[tool.id] = name;
   saveTeacherTools();
-  renderPickerScreen();
+  if (animationsOn()) {
+    drawInProgress = true;
+    setDrawButton('#pickerDraw', true);
+    try {
+      const resultEl = document.querySelector('#pickerResult');
+      const decoys = tool.students.filter((s) => s !== name);
+      let previous = null;
+      for (let i = 0; i < DRAW_FALLS; i++) {
+        let shown = name;
+        if (i < DRAW_FALLS - 1) {
+          const options = (decoys.length ? decoys : tool.students).filter((s) => s !== previous);
+          const pool = options.length ? options : tool.students;
+          shown = pool[randomInt(pool.length)];
+        }
+        previous = shown;
+        resultEl.textContent = shown;
+        playDrop(resultEl);
+        await sleep(650);
+      }
+    } finally {
+      drawInProgress = false;
+      setDrawButton('#pickerDraw', false);
+    }
+  }
+  if (state.activeTool === tool.id) renderPickerScreen();
 }
 document.querySelector('#pickerDraw').addEventListener('click', drawPerson);
 document.querySelector('#pickerScreenLabel').addEventListener('change', (e) => { const t = activeClassTool(); if (t) renameTool(t, e.target.value); });
@@ -2097,9 +2140,12 @@ function renderGroupsScreen() {
     renderGroupsScreen();
   }));
   const groups = state.groupsResult[tool.id];
-  document.querySelector('#groupsResultList').innerHTML = groups ? groups.map((g, i) =>
-    `<div class="rounded-2xl border border-line bg-app p-3.5"><b class="mb-1.5 block">Grupa ${i + 1} <span class="font-normal text-muted">(${g.length})</span></b><ul class="grid gap-0.5 text-sm">${g.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul></div>`
-  ).join('') : '';
+  document.querySelector('#groupsResultList').innerHTML = groups ? groupsHtml(groups, false) : '';
+}
+function groupsHtml(groups, animate) {
+  return groups.map((g, i) =>
+    `<div class="rounded-2xl border border-line bg-app p-3.5${animate ? ' drop-in' : ''}"${animate ? ` style="animation-delay:${Math.min(i, 6) * 70}ms"` : ''}><b class="mb-1.5 block">Grupa ${i + 1} <span class="font-normal text-muted">(${g.length})</span></b><ul class="grid gap-0.5 text-sm">${g.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul></div>`
+  ).join('');
 }
 function openGroupsScreen(id) {
   state.activeTool = id;
@@ -2107,7 +2153,8 @@ function openGroupsScreen(id) {
   renderGroupsScreen();
   show('groupsScreen');
 }
-function drawGroups() {
+async function drawGroups() {
+  if (drawInProgress) return;
   const tool = activeClassTool();
   if (!tool) return;
   saveRoster(tool, document.querySelector('#groupsRoster').value);
@@ -2132,7 +2179,22 @@ function drawGroups() {
     state.groupsResult[tool.id] = groups;
   }
   saveTeacherTools();
-  renderGroupsScreen();
+  if (groups && animationsOn()) {
+    drawInProgress = true;
+    setDrawButton('#groupsDraw', true);
+    try {
+      const list = document.querySelector('#groupsResultList');
+      for (let i = 0; i < DRAW_FALLS; i++) {
+        const frame = i < DRAW_FALLS - 1 ? (buildGroups(tool.students, k, tool.apart) || groups) : groups;
+        list.innerHTML = groupsHtml(frame, true);
+        await sleep(900);
+      }
+    } finally {
+      drawInProgress = false;
+      setDrawButton('#groupsDraw', false);
+    }
+  }
+  if (state.activeTool === tool.id) renderGroupsScreen();
 }
 document.querySelector('#groupsDraw').addEventListener('click', drawGroups);
 document.querySelector('#groupsScreenLabel').addEventListener('change', (e) => { const t = activeClassTool(); if (t) renameTool(t, e.target.value); });

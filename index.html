@@ -205,7 +205,9 @@
       <div class="grid gap-4 lg:grid-cols-2">
         <div class="rounded-[22px] border border-line bg-card p-[22px] text-center shadow-[0_7px_22px_var(--shadow)]">
           <input class="mx-auto mb-1 block rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-[1.2em] font-bold tracking-tight outline-primary focus:border-line focus:bg-app" id="pickerScreenLabel" maxlength="40" placeholder="Losowanie osoby" />
-          <div class="my-8 min-h-[1.2em] break-words text-[clamp(2em,9vw,4em)] font-black" id="pickerResult">—</div>
+          <div class="my-8 overflow-hidden py-1">
+            <div class="min-h-[1.2em] break-words text-[clamp(2em,9vw,4em)] font-black" id="pickerResult">—</div>
+          </div>
           <button class="rounded-xl bg-primary px-8 py-3 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="pickerDraw">Losuj</button>
           <p class="mt-4 text-sm text-muted" id="pickerInfo"></p>
         </div>
@@ -251,7 +253,7 @@
         <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
           <button class="mb-4 w-full rounded-xl bg-primary px-6 py-3 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="groupsDraw">Losuj grupy</button>
           <p class="mb-3 hidden rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" id="groupsError"></p>
-          <div class="grid gap-3 sm:grid-cols-2" id="groupsResultList"></div>
+          <div class="grid gap-3 overflow-hidden sm:grid-cols-2" id="groupsResultList"></div>
         </div>
       </div>
     </section>
