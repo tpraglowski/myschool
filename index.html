@@ -514,13 +514,14 @@
     </form>
   </dialog>
 
-  <dialog class="w-[min(400px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="toolPicker">
-    <div class="p-6">
-      <h2 class="mb-[18px] text-[1.35em] font-bold">Dodaj narzędzie</h2>
-      <div class="grid gap-2.5" id="toolPickerList"></div>
-      <div class="mt-[21px] flex justify-end">
-        <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelToolPicker">Anuluj</button>
+  <dialog class="m-0 h-[100dvh] max-h-none w-screen max-w-none bg-app p-0 text-ink" id="toolPicker">
+    <div class="mx-auto flex h-full w-[calc(100%-2rem)] max-w-[1120px] flex-col py-7">
+      <div class="mb-5 flex items-center justify-between gap-3">
+        <h2 class="text-[clamp(1.5em,4vw,2.2em)] font-extrabold tracking-tight">Dodaj narzędzie</h2>
+        <button class="rounded-[10px] bg-card px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelToolPicker">✕ Zamknij</button>
       </div>
+      <input class="mb-5 w-full rounded-xl border border-line bg-card px-4 py-3 text-ink outline-primary" id="toolSearch" type="search" placeholder="Szukaj funkcji…" autocomplete="off" />
+      <div class="grid flex-1 content-start gap-3 overflow-y-auto sm:grid-cols-[repeat(auto-fill,minmax(260px,1fr))]" id="toolPickerList"></div>
     </div>
   </dialog>
 

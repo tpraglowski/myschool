@@ -1778,19 +1778,28 @@ const toolTypes = [
   { type: 'timer', icon: '⏱', name: 'Timer', description: 'Odliczanie czasu na pełnym ekranie' },
 ];
 const toolPickerDialog = document.querySelector('#toolPicker');
-function openToolPicker() {
-  document.querySelector('#toolPickerList').innerHTML = toolTypes.map((t) =>
-    `<button type="button" class="flex items-center gap-3 rounded-2xl border border-line bg-app p-3.5 text-left transition hover:border-primary" data-pick-tool="${t.type}">
-      <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-card text-xl">${t.icon}</span>
+function renderToolPickerList() {
+  const query = document.querySelector('#toolSearch').value.trim().toLocaleLowerCase('pl-PL');
+  const matches = toolTypes.filter((t) => `${t.name} ${t.description}`.toLocaleLowerCase('pl-PL').includes(query));
+  const list = document.querySelector('#toolPickerList');
+  list.innerHTML = matches.length ? matches.map((t) =>
+    `<button type="button" class="flex items-center gap-3 rounded-2xl border border-line bg-card p-4 text-left shadow-[0_4px_15px_var(--shadow)] transition hover:border-primary" data-pick-tool="${t.type}">
+      <span class="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-app text-2xl">${t.icon}</span>
       <span><b class="block">${t.name}</b><span class="text-[.85em] text-muted">${t.description}</span></span>
     </button>`
-  ).join('');
-  document.querySelectorAll('[data-pick-tool]').forEach((b) => b.addEventListener('click', () => {
+  ).join('') : emptyState('Brak wyników', 'Żadna funkcja nie pasuje do wyszukiwania.');
+  list.querySelectorAll('[data-pick-tool]').forEach((b) => b.addEventListener('click', () => {
     addTeacherTool(b.dataset.pickTool);
     toolPickerDialog.close();
   }));
-  toolPickerDialog.showModal();
 }
+function openToolPicker() {
+  document.querySelector('#toolSearch').value = '';
+  renderToolPickerList();
+  toolPickerDialog.showModal();
+  document.querySelector('#toolSearch').focus();
+}
+document.querySelector('#toolSearch').addEventListener('input', renderToolPickerList);
 document.querySelector('#cancelToolPicker').addEventListener('click', () => toolPickerDialog.close());
 function addTeacherTool(type) {
   const tool = { id: crypto.randomUUID(), type, label: '', duration: currentAccount()?.lastTimerSeconds || 300 };
