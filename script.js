@@ -103,7 +103,7 @@ const normalizeSubjectsByClass = (byClass) => {
 const legacyStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
 const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
 const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
-const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], adminNote: '', teacherTools: [], lastTimerSeconds: 300, ...a }));
+const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], adminNote: '', teacherTools: [], lastTimerSeconds: 300, lastRoster: [], ...a }));
 
 const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'notifications'];
 const seedValue = {
@@ -134,6 +134,9 @@ const state = {
   teacherToolsEditing: false,
   timerRuntime: {},
   activeTimerTool: null,
+  activeTool: null,
+  pickerResult: {},
+  groupsResult: {},
   viewingClassroom: null,
   scheduleDay: currentWeekday(),
   adminScheduleDay: currentWeekday(),
@@ -352,7 +355,7 @@ function setSelected(el, isSelected, onClasses, offClasses) {
 }
 
 // ---------- Navigation ----------
-const navParent = { schedule: 'home', changes: 'home', events: 'home', admin: 'home', detail: 'competences', timerScreen: 'teacherTools' };
+const navParent = { schedule: 'home', changes: 'home', events: 'home', admin: 'home', detail: 'competences', timerScreen: 'teacherTools', pickerScreen: 'teacherTools', groupsScreen: 'teacherTools' };
 function show(id) {
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== id));
   // Teacher Tools can be edited from the separate timerScreen (rename, change
@@ -1461,6 +1464,9 @@ function logout(message) {
   state.timerRuntime = {};
   state.teacherToolsEditing = false;
   state.activeTimerTool = null;
+  state.activeTool = null;
+  state.pickerResult = {};
+  state.groupsResult = {};
   document.querySelector('#headerTimerIndicator').classList.add('hidden');
   document.querySelector('#loginLayer').classList.remove('hidden');
   screen('startScreen');
@@ -1773,10 +1779,13 @@ function formatTimer(totalSeconds) {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 }
 // Every tool type the "+" picker offers. Add an entry here (plus rendering for it)
-// to make a new kind of tool available; only the timer exists so far.
+// to make a new kind of tool available.
 const toolTypes = [
   { type: 'timer', icon: '⏱', name: 'Timer', description: 'Odliczanie czasu na pełnym ekranie' },
+  { type: 'picker', icon: '🎲', name: 'Losowanie osoby', description: 'Losuje ucznia z klasy; wylosowany nie wypadnie przez następne 5 losowań' },
+  { type: 'groups', icon: '👥', name: 'Losowanie grup', description: 'Dzieli klasę na grupy, z możliwością rozdzielenia wybranych osób' },
 ];
+const toolTypeInfo = (type) => toolTypes.find((t) => t.type === type) || toolTypes[0];
 const toolPickerDialog = document.querySelector('#toolPicker');
 function renderToolPickerList() {
   const query = document.querySelector('#toolSearch').value.trim().toLocaleLowerCase('pl-PL');
@@ -1802,7 +1811,12 @@ function openToolPicker() {
 document.querySelector('#toolSearch').addEventListener('input', renderToolPickerList);
 document.querySelector('#cancelToolPicker').addEventListener('click', () => toolPickerDialog.close());
 function addTeacherTool(type) {
-  const tool = { id: crypto.randomUUID(), type, label: '', duration: currentAccount()?.lastTimerSeconds || 300 };
+  const account = currentAccount();
+  const tool = { id: crypto.randomUUID(), type, label: '' };
+  if (type === 'timer') tool.duration = account?.lastTimerSeconds || 300;
+  if (type === 'picker' || type === 'groups') tool.students = [...(account?.lastRoster || [])];
+  if (type === 'picker') tool.recent = [];
+  if (type === 'groups') Object.assign(tool, { apart: [], groupMode: 'count', groupValue: 2 });
   teacherToolsFor().push(tool);
   saveTeacherTools();
   renderTeacherTools();
@@ -1810,15 +1824,23 @@ function addTeacherTool(type) {
 function ensureTimerRuntime(tool) {
   return state.timerRuntime[tool.id] || (state.timerRuntime[tool.id] = { remaining: tool.duration, running: false });
 }
-// A tile is just an entry point — clicking it opens the full timerScreen view, it
-// never shows the countdown itself.
+// A tile is just an entry point — clicking it opens that tool's own full-screen view
+// (the timer tile never shows the countdown itself).
 function toolTileHtml(tool, editing) {
+  const info = toolTypeInfo(tool.type);
   return `<button type="button" class="relative min-h-[140px] rounded-[20px] border border-line bg-card p-5 text-left shadow-[0_7px_22px_var(--shadow)] transition hover:-translate-y-1 hover:shadow-lg" data-open-tool="${tool.id}">
     ${editing ? `<span class="absolute right-3 top-3 z-10 rounded-lg bg-app px-2 py-1 text-sm font-bold text-red-600" data-delete-tool="${tool.id}" aria-label="Usuń narzędzie">🗑</span>` : ''}
-    <span class="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-app text-xl">⏱</span>
-    <b class="block truncate">${escapeHtml(tool.label || 'Timer')}</b>
-    <span class="text-[.85em] text-muted">Timer</span>
+    <span class="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-app text-xl">${info.icon}</span>
+    <b class="block truncate">${escapeHtml(tool.label || info.name)}</b>
+    <span class="text-[.85em] text-muted">${info.name}</span>
   </button>`;
+}
+function openTool(id) {
+  const tool = teacherToolsFor().find((t) => t.id === id);
+  if (!tool) return;
+  if (tool.type === 'picker') openPickerScreen(id);
+  else if (tool.type === 'groups') openGroupsScreen(id);
+  else openTimerScreen(id);
 }
 function bindTeacherToolsEvents(el) {
   document.querySelector('#addTeacherTool')?.addEventListener('click', openToolPicker);
@@ -1831,12 +1853,14 @@ function bindTeacherToolsEvents(el) {
       const account = currentAccount();
       account.teacherTools = teacherToolsFor().filter((t) => t.id !== b.dataset.deleteTool);
       delete state.timerRuntime[b.dataset.deleteTool];
+      delete state.pickerResult[b.dataset.deleteTool];
+      delete state.groupsResult[b.dataset.deleteTool];
       saveTeacherTools();
       renderTeacherTools();
       updateHeaderTimerIndicator();
     });
   });
-  el.querySelectorAll('[data-open-tool]').forEach((b) => b.addEventListener('click', () => openTimerScreen(b.dataset.openTool)));
+  el.querySelectorAll('[data-open-tool]').forEach((b) => b.addEventListener('click', () => openTool(b.dataset.openTool)));
 }
 function renderTeacherTools() {
   if (!isTeacher()) return;
@@ -1926,6 +1950,209 @@ document.querySelector('#timerSetCustom').addEventListener('click', () => {
   const m = Math.min(59, Math.max(0, Number(document.querySelector('#timerMinutes').value) || 0));
   const s = Math.min(59, Math.max(0, Number(document.querySelector('#timerSeconds').value) || 0));
   applyTimerDuration(h * 3600 + m * 60 + s);
+});
+
+// ---------- Class tools: random person / random groups ----------
+// Both keep their class list (tool.students) on the tool itself, so it's saved with the
+// teacher's account like the rest of Teacher Tools. The most recently typed list is also
+// remembered (account.lastRoster) so a new tool starts with it instead of an empty box.
+const PICK_COOLDOWN = 5;
+function parseRoster(text) {
+  const seen = new Set();
+  return text.split(/[\n,;]+/).map((s) => s.trim()).filter((s) => {
+    const key = s.toLocaleLowerCase('pl-PL');
+    if (!s || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 60);
+}
+function randomInt(n) {
+  const max = Math.floor(0x100000000 / n) * n;
+  const buf = new Uint32Array(1);
+  do { crypto.getRandomValues(buf); } while (buf[0] >= max);
+  return buf[0] % n;
+}
+function shuffled(list) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+const activeClassTool = () => teacherToolsFor().find((t) => t.id === state.activeTool);
+function saveRoster(tool, text) {
+  const names = parseRoster(text);
+  tool.students = names;
+  if (tool.apart) tool.apart = tool.apart.filter(({ a, b }) => names.includes(a) && names.includes(b));
+  const account = currentAccount();
+  if (account) account.lastRoster = names;
+  saveTeacherTools();
+}
+function renameTool(tool, value) {
+  tool.label = value.trim();
+  saveTeacherTools();
+}
+
+// -- Random person --
+function pickerBlocked(tool) {
+  const cooldown = Math.min(PICK_COOLDOWN, Math.max(0, tool.students.length - 1));
+  return { cooldown, names: cooldown > 0 ? (tool.recent || []).slice(-cooldown) : [] };
+}
+function renderPickerScreen() {
+  const tool = activeClassTool();
+  if (!tool) { show('teacherTools'); return; }
+  document.querySelector('#pickerScreenLabel').value = tool.label || '';
+  document.querySelector('#pickerRoster').value = tool.students.join('\n');
+  document.querySelector('#pickerRosterCount').textContent = `Uczniów: ${tool.students.length}`;
+  document.querySelector('#pickerResult').textContent = state.pickerResult[tool.id] || '—';
+  const { cooldown } = pickerBlocked(tool);
+  document.querySelector('#pickerInfo').textContent = tool.students.length
+    ? `Wylosowana osoba nie wypadnie przez następne ${cooldown} ${cooldown === 1 ? 'losowanie' : cooldown < 5 ? 'losowania' : 'losowań'}.${tool.students.length - 1 < PICK_COOLDOWN ? ' (Przy tak małej klasie blokada jest krótsza.)' : ''}`
+    : 'Najpierw wpisz listę klasy.';
+  const recent = (tool.recent || []).slice(-PICK_COOLDOWN).reverse();
+  document.querySelector('#pickerRecent').innerHTML = recent.length ? recent.map((name, i) => {
+    const left = cooldown - i;
+    return `<span class="rounded-lg bg-app px-2.5 py-1 text-sm font-bold${left > 0 ? '' : ' text-muted line-through'}">${escapeHtml(name)}${left > 0 ? ` <span class="font-normal text-muted">(jeszcze ${left})</span>` : ''}</span>`;
+  }).join('') : '<span class="text-sm text-muted">Nikt jeszcze nie został wylosowany.</span>';
+}
+function openPickerScreen(id) {
+  state.activeTool = id;
+  renderPickerScreen();
+  show('pickerScreen');
+}
+function drawPerson() {
+  const tool = activeClassTool();
+  if (!tool) return;
+  saveRoster(tool, document.querySelector('#pickerRoster').value);
+  if (!tool.students.length) { renderPickerScreen(); return; }
+  const blocked = new Set(pickerBlocked(tool).names);
+  const candidates = tool.students.filter((s) => !blocked.has(s));
+  const name = candidates[randomInt(candidates.length)];
+  tool.recent = [...(tool.recent || []), name].slice(-PICK_COOLDOWN);
+  state.pickerResult[tool.id] = name;
+  saveTeacherTools();
+  renderPickerScreen();
+}
+document.querySelector('#pickerDraw').addEventListener('click', drawPerson);
+document.querySelector('#pickerScreenLabel').addEventListener('change', (e) => { const t = activeClassTool(); if (t) renameTool(t, e.target.value); });
+document.querySelector('#pickerRoster').addEventListener('change', (e) => { const t = activeClassTool(); if (t) { saveRoster(t, e.target.value); renderPickerScreen(); } });
+document.querySelector('#pickerClearRecent').addEventListener('click', () => {
+  const t = activeClassTool();
+  if (!t) return;
+  t.recent = [];
+  saveTeacherTools();
+  renderPickerScreen();
+});
+
+// -- Random groups --
+// Randomized backtracking: students are placed one at a time into a random group that
+// still has room and holds nobody they must be kept apart from; if that dead-ends it
+// backs up, and after a bounded number of tries it gives up (impossible constraints).
+function buildGroups(students, k, apart) {
+  const conflicts = new Map(students.map((s) => [s, new Set()]));
+  apart.forEach(({ a, b }) => { conflicts.get(a)?.add(b); conflicts.get(b)?.add(a); });
+  const base = Math.floor(students.length / k);
+  const extra = students.length % k;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const order = shuffled(students).sort((a, b) => conflicts.get(b).size - conflicts.get(a).size);
+    const caps = shuffled(Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0)));
+    const groups = Array.from({ length: k }, () => []);
+    let steps = 0;
+    const place = (i) => {
+      if (i === order.length) return true;
+      if (++steps > 20000) return false;
+      const s = order[i];
+      for (const gi of shuffled([...groups.keys()])) {
+        if (groups[gi].length >= caps[gi] || groups[gi].some((m) => conflicts.get(s).has(m))) continue;
+        groups[gi].push(s);
+        if (place(i + 1)) return true;
+        groups[gi].pop();
+      }
+      return false;
+    };
+    if (place(0)) return groups;
+  }
+  return null;
+}
+function renderGroupsScreen() {
+  const tool = activeClassTool();
+  if (!tool) { show('teacherTools'); return; }
+  document.querySelector('#groupsScreenLabel').value = tool.label || '';
+  document.querySelector('#groupsRoster').value = tool.students.join('\n');
+  document.querySelector('#groupsRosterCount').textContent = `Uczniów: ${tool.students.length}`;
+  document.querySelector('#groupsMode').value = tool.groupMode;
+  document.querySelector('#groupsValue').value = tool.groupValue;
+  const options = tool.students.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  document.querySelector('#apartA').innerHTML = options;
+  document.querySelector('#apartB').innerHTML = options;
+  if (tool.students.length > 1) document.querySelector('#apartB').selectedIndex = 1;
+  const apartList = document.querySelector('#apartList');
+  apartList.innerHTML = tool.apart.length ? tool.apart.map(({ a, b }, i) =>
+    `<span class="inline-flex items-center gap-1.5 rounded-lg bg-app px-2.5 py-1 text-sm font-bold">${escapeHtml(a)} ✕ ${escapeHtml(b)}<button class="font-bold text-red-600" data-remove-apart="${i}" aria-label="Usuń regułę">×</button></span>`
+  ).join('') : '<span class="text-sm text-muted">Brak ograniczeń.</span>';
+  apartList.querySelectorAll('[data-remove-apart]').forEach((b) => b.addEventListener('click', () => {
+    tool.apart.splice(Number(b.dataset.removeApart), 1);
+    saveTeacherTools();
+    renderGroupsScreen();
+  }));
+  const groups = state.groupsResult[tool.id];
+  document.querySelector('#groupsResultList').innerHTML = groups ? groups.map((g, i) =>
+    `<div class="rounded-2xl border border-line bg-app p-3.5"><b class="mb-1.5 block">Grupa ${i + 1} <span class="font-normal text-muted">(${g.length})</span></b><ul class="grid gap-0.5 text-sm">${g.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul></div>`
+  ).join('') : '';
+}
+function openGroupsScreen(id) {
+  state.activeTool = id;
+  document.querySelector('#groupsError').classList.add('hidden');
+  renderGroupsScreen();
+  show('groupsScreen');
+}
+function drawGroups() {
+  const tool = activeClassTool();
+  if (!tool) return;
+  saveRoster(tool, document.querySelector('#groupsRoster').value);
+  const error = document.querySelector('#groupsError');
+  const n = tool.students.length;
+  if (n < 2) {
+    error.textContent = 'Wpisz co najmniej dwie osoby.';
+    error.classList.remove('hidden');
+    return;
+  }
+  const value = Math.min(30, Math.max(1, Number(document.querySelector('#groupsValue').value) || 1));
+  tool.groupMode = document.querySelector('#groupsMode').value;
+  tool.groupValue = value;
+  const k = Math.min(n, tool.groupMode === 'count' ? value : Math.ceil(n / value));
+  const groups = buildGroups(tool.students, k, tool.apart);
+  if (!groups) {
+    error.textContent = 'Nie da się podzielić klasy z tymi ograniczeniami — usuń część reguł „nie mogą być razem” albo zmień liczbę grup.';
+    error.classList.remove('hidden');
+    state.groupsResult[tool.id] = null;
+  } else {
+    error.classList.add('hidden');
+    state.groupsResult[tool.id] = groups;
+  }
+  saveTeacherTools();
+  renderGroupsScreen();
+}
+document.querySelector('#groupsDraw').addEventListener('click', drawGroups);
+document.querySelector('#groupsScreenLabel').addEventListener('change', (e) => { const t = activeClassTool(); if (t) renameTool(t, e.target.value); });
+document.querySelector('#groupsRoster').addEventListener('change', (e) => { const t = activeClassTool(); if (t) { saveRoster(t, e.target.value); renderGroupsScreen(); } });
+['#groupsMode', '#groupsValue'].forEach((sel) => document.querySelector(sel).addEventListener('change', () => {
+  const t = activeClassTool();
+  if (!t) return;
+  t.groupMode = document.querySelector('#groupsMode').value;
+  t.groupValue = Math.min(30, Math.max(1, Number(document.querySelector('#groupsValue').value) || 1));
+  saveTeacherTools();
+}));
+document.querySelector('#apartAdd').addEventListener('click', () => {
+  const t = activeClassTool();
+  if (!t) return;
+  const a = document.querySelector('#apartA').value;
+  const b = document.querySelector('#apartB').value;
+  if (!a || !b || a === b || t.apart.some((p) => (p.a === a && p.b === b) || (p.a === b && p.b === a))) return;
+  t.apart.push({ a, b }); // objects, not [a, b]: Firestore rejects nested arrays
+  saveTeacherTools();
+  renderGroupsScreen();
 });
 
 // Shows the remaining time for whichever timer is currently running, right under the
