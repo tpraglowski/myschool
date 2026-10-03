@@ -2132,20 +2132,35 @@ document.querySelector('#classDeleteBtn').addEventListener('click', () => {
 });
 ['#classEditorClose', '#classEditorDone'].forEach((sel) => document.querySelector(sel).addEventListener('click', () => classEditorDialog.close()));
 
-// The draw animation: the result drops in from above DRAW_FALLS times in a row, one fall
-// every DRAW_FRAME_MS (5 x 360 ms = 1.8 s, under the 2 s budget). The first four are
-// decoys (random names / random groupings) and the last one is the real result, which
-// is decided and saved before the animation starts. Skipped entirely when the
+// The draw animation: for DRAW_TOTAL_MS (2 s) a non-stop stream of decoy names (or
+// decoy groupings) falls through the result box with no pause between falls, then it
+// stops at once on the real result — which was decided and saved before the animation
+// started. Ticks are scheduled against the clock rather than chained sleeps, so the
+// total stays at 2 s however late individual timers fire. Skipped entirely when the
 // "Animacje" setting is off.
-const DRAW_FALLS = 5;
-const DRAW_FRAME_MS = 360;
+const DRAW_TOTAL_MS = 2000;
+const SETTLE_MS = 150;
+const NAME_TICK_MS = 85;
+const GROUPS_TICK_MS = 110;
+const TICKER_CLASSES = 'slot-fall absolute inset-x-0 top-0 break-words text-[clamp(2em,9vw,4em)] font-black';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const animationsOn = () => !document.body.classList.contains('no-animations');
 let drawInProgress = false;
-function playDrop(el) {
-  el.classList.remove('drop-in');
+// Runs `tick(i)` every `everyMs` until the stream part of the draw (everything but the
+// final settle) is over.
+async function runDrawStream(everyMs, tick) {
+  const start = performance.now();
+  const streamEnd = start + DRAW_TOTAL_MS - SETTLE_MS;
+  let i = 0;
+  while (performance.now() < streamEnd) {
+    tick(i++);
+    await sleep(Math.max(0, Math.min(start + i * everyMs, streamEnd) - performance.now()));
+  }
+}
+function settle(el) {
+  el.classList.remove('settle-in');
   void el.offsetWidth;
-  el.classList.add('drop-in');
+  el.classList.add('settle-in');
 }
 function setDrawButton(selector, busy) {
   const button = document.querySelector(selector);
@@ -2204,21 +2219,26 @@ async function drawPerson() {
     setDrawButton('#pickerDraw', true);
     try {
       const resultEl = document.querySelector('#pickerResult');
-      const decoys = cls.students.filter((s) => s !== name);
+      const stage = document.querySelector('#pickerStage');
+      resultEl.classList.add('invisible');
       let previous = null;
-      for (let i = 0; i < DRAW_FALLS; i++) {
-        let shown = name;
-        if (i < DRAW_FALLS - 1) {
-          const options = (decoys.length ? decoys : cls.students).filter((s) => s !== previous);
-          const pool = options.length ? options : cls.students;
-          shown = pool[randomInt(pool.length)];
-        }
-        previous = shown;
-        resultEl.textContent = shown;
-        playDrop(resultEl);
-        await sleep(DRAW_FRAME_MS);
-      }
+      await runDrawStream(NAME_TICK_MS, () => {
+        const others = cls.students.filter((s) => s !== previous);
+        const pool = others.length ? others : cls.students;
+        previous = pool[randomInt(pool.length)];
+        const ticker = document.createElement('div');
+        ticker.className = TICKER_CLASSES;
+        ticker.textContent = previous;
+        stage.appendChild(ticker);
+        setTimeout(() => ticker.remove(), 400);
+      });
+      stage.querySelectorAll('.slot-fall').forEach((t) => t.remove());
+      resultEl.textContent = name;
+      resultEl.classList.remove('invisible');
+      settle(resultEl);
+      await sleep(SETTLE_MS);
     } finally {
+      document.querySelector('#pickerResult').classList.remove('invisible');
       drawInProgress = false;
       setDrawButton('#pickerDraw', false);
     }
@@ -2265,9 +2285,9 @@ function buildGroups(students, k, apart) {
   }
   return null;
 }
-function groupsHtml(groups, animate) {
+function groupsHtml(groups, animation = '') {
   return groups.map((g, i) =>
-    `<div class="rounded-2xl border border-line bg-app p-3.5${animate ? ' drop-in' : ''}"${animate ? ` style="animation-delay:${Math.min(i, 5) * 15}ms"` : ''}><b class="mb-1.5 block">Grupa ${i + 1} <span class="font-normal text-muted">(${g.length})</span></b><ul class="grid gap-0.5 text-sm">${g.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul></div>`
+    `<div class="rounded-2xl border border-line bg-app p-3.5${animation ? ` ${animation}` : ''}"><b class="mb-1.5 block">Grupa ${i + 1} <span class="font-normal text-muted">(${g.length})</span></b><ul class="grid gap-0.5 text-sm">${g.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul></div>`
   ).join('');
 }
 function renderGroupsScreen() {
@@ -2278,7 +2298,7 @@ function renderGroupsScreen() {
   document.querySelector('#groupsMode').value = tool.groupMode;
   document.querySelector('#groupsValue').value = tool.groupValue;
   const groups = state.groupsResult[tool.id];
-  document.querySelector('#groupsResultList').innerHTML = groups ? groupsHtml(groups, false) : '';
+  document.querySelector('#groupsResultList').innerHTML = groups ? groupsHtml(groups) : '';
 }
 function openGroupsScreen(id) {
   state.activeTool = id;
@@ -2317,11 +2337,11 @@ async function drawGroups() {
     setDrawButton('#groupsDraw', true);
     try {
       const list = document.querySelector('#groupsResultList');
-      for (let i = 0; i < DRAW_FALLS; i++) {
-        const frame = i < DRAW_FALLS - 1 ? (buildGroups(cls.students, k, cls.apart) || groups) : groups;
-        list.innerHTML = groupsHtml(frame, true);
-        await sleep(DRAW_FRAME_MS);
-      }
+      await runDrawStream(GROUPS_TICK_MS, () => {
+        list.innerHTML = groupsHtml(buildGroups(cls.students, k, cls.apart) || groups, 'stream-in');
+      });
+      list.innerHTML = groupsHtml(groups, 'settle-in');
+      await sleep(SETTLE_MS);
     } finally {
       drawInProgress = false;
       setDrawButton('#groupsDraw', false);

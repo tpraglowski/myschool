@@ -36,15 +36,27 @@ body.radius-large { --card-radius: 25px; --panel-radius: 22px; }
 }
 .view:not(.hidden) { animation: appear .24s ease; }
 
-/* Used by the random person / random groups draws: the result falls in from above the
-   box it sits in (which clips it with overflow-hidden) and settles with a small bounce. */
-@keyframes dropIn {
-  0% { transform: translateY(-150%); opacity: 0; }
-  55% { transform: translateY(6%); opacity: 1; }
-  75% { transform: translateY(-3%); }
-  100% { transform: translateY(0); opacity: 1; }
+/* Random person / random groups draws. For about 2 s a non-stop stream of names (or
+   groupings) falls through the box they sit in — which clips it with overflow-hidden —
+   with no pause between falls, then everything stops at once on the real result.
+   slot-fall: a name passes all the way through the box (several overlap = a stream).
+   stream-in: a whole grouping drops in and is immediately replaced by the next one.
+   settle-in: the final result's quick last drop, after which it just stays put. */
+@keyframes slotFall {
+  from { transform: translateY(-110%); }
+  to { transform: translateY(110%); }
 }
-.drop-in { animation: dropIn .3s cubic-bezier(.3, .7, .4, 1) both; }
+.slot-fall { animation: slotFall .26s linear both; }
+@keyframes streamIn {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+.stream-in { animation: streamIn .11s linear both; }
+@keyframes settleIn {
+  from { transform: translateY(-110%); }
+  to { transform: translateY(0); }
+}
+.settle-in { animation: settleIn .15s cubic-bezier(.2, .7, .3, 1) both; }
 
 /* "Animacje: Wyłączone" setting — turns off motion app-wide without touching layout. */
 body.no-animations,
