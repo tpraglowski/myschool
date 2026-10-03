@@ -36,27 +36,28 @@ body.radius-large { --card-radius: 25px; --panel-radius: 22px; }
 }
 .view:not(.hidden) { animation: appear .24s ease; }
 
-/* Random person / random groups draws. For about 2 s a non-stop stream of names (or
-   groupings) falls through the box they sit in — which clips it with overflow-hidden —
-   with no pause between falls, then everything stops at once on the real result.
-   slot-fall: a name passes all the way through the box (several overlap = a stream).
-   stream-in: a whole grouping drops in and is immediately replaced by the next one.
-   settle-in: the final result's quick last drop, after which it just stays put. */
-@keyframes slotFall {
-  from { transform: translateY(-110%); }
-  to { transform: translateY(110%); }
+/* Random person / random groups draws — same motion as the Random Seat site.
+   name-drop: one flick of the random-person shuffle, a quick drop from above.
+   name-drop-final / chip-drop-final: the real result drops in with a bouncy overshoot.
+   group-card-pop: cards fade + slide up one after another; chip-hidden: a name waits
+   invisible until it's its turn to drop into the card. */
+@keyframes nameDrop {
+  0% { transform: translateY(-140%); opacity: 0; }
+  70% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
 }
-.slot-fall { animation: slotFall .26s linear both; }
-@keyframes streamIn {
-  from { transform: translateY(-100%); }
-  to { transform: translateY(0); }
+@keyframes nameDropFinal {
+  0% { transform: translateY(-220%); opacity: 0; }
+  55% { transform: translateY(12%); opacity: 1; }
+  75% { transform: translateY(-5%); opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
 }
-.stream-in { animation: streamIn .11s linear both; }
-@keyframes settleIn {
-  from { transform: translateY(-110%); }
-  to { transform: translateY(0); }
-}
-.settle-in { animation: settleIn .15s cubic-bezier(.2, .7, .3, 1) both; }
+.name-drop { animation: nameDrop .18s ease-in; }
+.name-drop-final { animation: nameDropFinal .4s cubic-bezier(.34, 1.56, .64, 1); }
+.group-card-pop { opacity: 0; transform: translateY(10px); transition: opacity .3s ease, transform .3s ease; }
+.group-card-pop.group-card-in { opacity: 1; transform: translateY(0); }
+.chip-hidden { opacity: 0; }
+.chip-drop-final { animation: nameDropFinal .32s cubic-bezier(.34, 1.56, .64, 1) forwards; }
 
 /* "Animacje: Wyłączone" setting — turns off motion app-wide without touching layout. */
 body.no-animations,
