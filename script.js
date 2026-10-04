@@ -376,6 +376,8 @@ function setSelected(el, isSelected, onClasses, offClasses) {
 const navParent = { schedule: 'home', changes: 'home', events: 'home', admin: 'home', detail: 'competences', timerScreen: 'teacherTools', pickerScreen: 'teacherTools', groupsScreen: 'teacherTools', seatingScreen: 'teacherTools' };
 function show(id) {
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== id));
+  // The thanks footer belongs to the main ("Główne") tab only.
+  document.querySelector('#thanksFooter').classList.toggle('hidden', id !== 'home');
   // Teacher Tools can be edited from the separate timerScreen (rename, change
   // duration) while its own grid sits hidden and stale — refresh it on the way back
   // in, regardless of which control navigated here (nav tab, "← Wróć", etc.).
