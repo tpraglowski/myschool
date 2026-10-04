@@ -29,6 +29,20 @@ body.radius-large { --card-radius: 25px; --panel-radius: 22px; }
 [class*="rounded-[25px]"] { border-radius: var(--card-radius) !important; }
 [class*="rounded-[22px]"] { border-radius: var(--panel-radius) !important; }
 
+/* "Efekt pór roku" palettes. They redefine the same tokens as light/dark mode, on <body>
+   (so they win over the inline accent/background the other settings put on <html>); the
+   falling particles are drawn by script.js on #seasonCanvas. */
+body.season-autumn { --bg: #fff1e2; --card: #fffaf3; --line: #f0d9bf; --muted: #8a6648; --primary: #d9641a; }
+body.season-autumn.dark { --bg: #1d130b; --card: #2a1b10; --line: #4d3420; --ink: #f8ebdc; --muted: #cdae90; --primary: #f28c3a; }
+body.season-winter { --bg: #f3f8fd; --card: #ffffff; --line: #d9e6f2; --muted: #5b7288; --primary: #3a82c4; }
+body.season-winter.dark { --bg: #0e1925; --card: #16273a; --line: #2a4560; --ink: #eef6ff; --muted: #a4bbd3; --primary: #7cc0f2; }
+body.season-spring { --bg: #f2fbef; --card: #ffffff; --line: #d9eed2; --muted: #5f7a5c; --primary: #2e9f4f; }
+body.season-spring.dark { --bg: #0f1c13; --card: #17291b; --line: #2b4731; --ink: #eef9ee; --muted: #a3c2a4; --primary: #5fd17c; }
+body.season-summer { --bg: #effbff; --card: #ffffff; --line: #cfeaf2; --muted: #4f7482; --primary: #0a9fc0; }
+body.season-summer.dark { --bg: #0c1d24; --card: #142a33; --line: #254552; --ink: #eaf8fc; --muted: #9bc0cc; --primary: #38cde8; }
+/* The pale-indigo back buttons are hard-coded in the markup; tint them with the palette instead. */
+body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in srgb, var(--primary) 14%, var(--card)); }
+
 /* Fade-in used on the view that becomes active */
 @keyframes appear {
   from { opacity: 0; transform: translateY(8px); }

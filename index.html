@@ -385,6 +385,17 @@
           </div>
         </div>
         <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Efekt pór roku</h2><p class="mt-1 text-sm text-muted">Jesień: pomarańcz i spadające liście. Zima: biel i śnieg. Wiosna: płatki kwiatów. Lato: złote iskierki. „Auto” wybiera porę roku wg daty. Ruch wymaga włączonych animacji, a kolory pory roku zastępują kolor akcentu.</p></div>
+          <div class="flex flex-wrap gap-2 sm:max-w-[330px] sm:justify-end">
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="off">Wyłączony</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="auto">Auto</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="autumn">🍂 Jesień</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="winter">❄ Zima</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="spring">🌸 Wiosna</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="summer">☀ Lato</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
           <div><h2 class="text-[1.2em] font-bold tracking-tight">Wygląd kart</h2><p class="mt-1 text-sm text-muted">Zmienia zaokrąglenie rogów kart w aplikacji.</p></div>
           <div class="flex gap-2">
             <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-radius="small">Małe</button>
@@ -826,6 +837,7 @@
     </form>
   </div>
 
-  <script type="module" src="script.js?v=20261004h"></script>
+  <canvas class="pointer-events-none fixed inset-0 z-[5] hidden h-full w-full" id="seasonCanvas" aria-hidden="true"></canvas>
+  <script type="module" src="script.js?v=20261004j"></script>
 </body>
 </html>

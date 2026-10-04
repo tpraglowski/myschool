@@ -1301,11 +1301,159 @@ document.querySelectorAll('[data-pattern]').forEach((b) => b.addEventListener('c
   persistUserSettings();
 }));
 
+// "Efekt pór roku": a colour palette (body.season-*) plus a layer of falling/floating
+// particles drawn on a full-screen canvas — autumn leaves, winter snow, spring petals,
+// summer sparkles. The setting is 'off' (default), 'auto' (follows the calendar month) or
+// one fixed season. The palette always applies when on; the moving particles only run while
+// "Animacje" is on, the OS isn't asking for reduced motion and the tab is visible.
+const SEASON_NAMES = ['autumn', 'winter', 'spring', 'summer'];
+const seasonCanvas = document.querySelector('#seasonCanvas');
+const seasonCtx = seasonCanvas.getContext('2d');
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+let seasonSetting = 'off';
+let seasonParticles = [];
+let seasonFrame = 0;
+let seasonLastTime = 0;
+let seasonShown = null;
+function seasonFor(setting) {
+  if (setting !== 'auto') return SEASON_NAMES.includes(setting) ? setting : null;
+  const month = new Date().getMonth();
+  if (month >= 8 && month <= 10) return 'autumn';
+  if (month === 11 || month <= 1) return 'winter';
+  return month <= 4 ? 'spring' : 'summer';
+}
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+const SEASON_COLORS = {
+  autumn: ['#e8731a', '#c8401e', '#f0a020', '#a8501c', '#d9892b', '#b8321c'],
+  spring: ['#f9a8c9', '#f7bdd5', '#f6a5c0', '#f48fb1', '#fbc4da'],
+  summer: ['#ffc933', '#ffd966', '#ffb300', '#fff0a8'],
+};
+function newSeasonParticle(season, w, h, anywhere) {
+  const size = { autumn: rand(8, 15), winter: rand(1.8, 5.5), spring: rand(4, 8), summer: rand(1.5, 4) }[season];
+  const p = { x: rand(0, w), y: anywhere ? rand(-h * 0.05, h) : rand(-40, -5), size, rot: rand(0, 6.28), vr: rand(-1.4, 1.4), phase: rand(0, 6.28), sway: rand(0.4, 1.3), color: pick(SEASON_COLORS[season] || ['#fff']), round: Math.random() < 0.4 };
+  if (season === 'autumn') { p.vy = rand(35, 70); p.vx = rand(-10, 18); }
+  else if (season === 'winter') { p.vy = rand(30, 75) * (size / 4 + 0.5); p.vx = rand(-8, 8); p.vr = rand(-0.6, 0.6); }
+  else if (season === 'spring') { p.vy = rand(22, 45); p.vx = rand(4, 22); }
+  else { p.vy = rand(-16, -4); p.vx = rand(-6, 6); p.y = anywhere ? rand(0, h) : rand(h * 0.6, h + 20); }
+  return p;
+}
+function drawSeasonParticle(ctx, season, p, time) {
+  ctx.save();
+  if (season === 'summer') {
+    const twinkle = 0.45 + 0.55 * Math.sin(time * 2 + p.phase);
+    ctx.globalAlpha = 0.18 * twinkle;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 3.2, 0, 6.283); ctx.fill();
+    ctx.globalAlpha = 0.55 + 0.4 * twinkle;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 6.283); ctx.fill();
+    ctx.restore();
+    return;
+  }
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.rot);
+  if (season === 'autumn') {
+    const s = p.size;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    if (p.round) { ctx.ellipse(0, 0, s * 0.62, s, 0, 0, 6.283); } else {
+      ctx.moveTo(0, -s); ctx.bezierCurveTo(s * 0.95, -s * 0.45, s * 0.8, s * 0.55, 0, s);
+      ctx.bezierCurveTo(-s * 0.8, s * 0.55, -s * 0.95, -s * 0.45, 0, -s);
+    }
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(70, 30, 10, .4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, -s * 0.8); ctx.lineTo(0, s * 1.25); ctx.stroke();
+  } else if (season === 'spring') {
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.ellipse(0, 0, p.size * 0.55, p.size, 0, 0, 6.283); ctx.fill();
+  } else if (p.size > 4.3) {
+    ctx.strokeStyle = 'rgba(150, 185, 220, .9)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (let i = 0; i < 3; i++) { const a = (i * Math.PI) / 3; ctx.moveTo(Math.cos(a) * p.size, Math.sin(a) * p.size); ctx.lineTo(-Math.cos(a) * p.size, -Math.sin(a) * p.size); }
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = 'rgba(255, 255, 255, .95)';
+    ctx.strokeStyle = 'rgba(140, 175, 215, .6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(0, 0, p.size, 0, 6.283); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+function sizeSeasonCanvas() {
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  seasonCanvas.width = Math.round(window.innerWidth * ratio);
+  seasonCanvas.height = Math.round(window.innerHeight * ratio);
+  seasonCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+}
+function seasonTick(now) {
+  seasonFrame = 0;
+  if (!seasonShown) return;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const dt = Math.min(0.05, (now - seasonLastTime) / 1000 || 0.016);
+  seasonLastTime = now;
+  seasonCtx.clearRect(0, 0, w, h);
+  seasonParticles.forEach((p, i) => {
+    p.phase += dt * p.sway * 2;
+    p.x += (p.vx + Math.sin(p.phase) * (seasonShown === 'summer' ? 8 : 22)) * dt;
+    p.y += p.vy * dt;
+    p.rot += p.vr * dt;
+    const gone = p.y > h + 30 || p.y < -30 || p.x > w + 40 || p.x < -40;
+    if (gone) seasonParticles[i] = newSeasonParticle(seasonShown, w, h, false);
+    drawSeasonParticle(seasonCtx, seasonShown, seasonParticles[i], now / 1000);
+  });
+  seasonFrame = requestAnimationFrame(seasonTick);
+}
+function stopSeasonParticles() {
+  cancelAnimationFrame(seasonFrame);
+  seasonFrame = 0;
+  seasonParticles = [];
+  seasonShown = null;
+  seasonCtx.clearRect(0, 0, seasonCanvas.width, seasonCanvas.height);
+  seasonCanvas.classList.add('hidden');
+}
+function refreshSeason() {
+  const season = seasonFor(seasonSetting);
+  document.body.classList.remove(...SEASON_NAMES.map((n) => `season-${n}`));
+  if (season) document.body.classList.add(`season-${season}`);
+  const motion = season && !document.body.classList.contains('no-animations') && !reducedMotion.matches;
+  if (!motion) { stopSeasonParticles(); return; }
+  if (seasonShown !== season) {
+    stopSeasonParticles();
+    seasonShown = season;
+    sizeSeasonCanvas();
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const count = Math.round(Math.min(season === 'winter' ? 90 : 55, Math.max(18, w / (season === 'winter' ? 14 : 24))));
+    seasonParticles = Array.from({ length: count }, () => newSeasonParticle(season, w, h, true));
+  }
+  seasonCanvas.classList.remove('hidden');
+  if (!seasonFrame) { seasonLastTime = performance.now(); seasonFrame = requestAnimationFrame(seasonTick); }
+}
+function applySeason(setting) {
+  seasonSetting = ['off', 'auto', ...SEASON_NAMES].includes(setting) ? setting : 'off';
+  refreshSeason();
+  document.querySelectorAll('[data-season]').forEach((x) => setSelected(x, x.dataset.season === seasonSetting, ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']));
+}
+window.addEventListener('resize', () => { if (seasonShown) sizeSeasonCanvas(); });
+reducedMotion.addEventListener?.('change', refreshSeason);
+setInterval(refreshSeason, 30 * 60 * 1000);
+document.querySelectorAll('[data-season]').forEach((b) => b.addEventListener('click', () => {
+  applySeason(b.dataset.season);
+  localStorage.setItem('schoolSeason', seasonSetting);
+  persistUserSettings();
+}));
+
 function applyAnimations(enabled) {
   document.body.classList.toggle('no-animations', !enabled);
+  refreshSeason();
   document.querySelectorAll('[data-animations]').forEach((x) => setSelected(x, x.dataset.animations === (enabled ? 'on' : 'off'), ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']));
 }
 applyAnimations(localStorage.getItem('schoolAnimations') !== 'off');
+applySeason(localStorage.getItem('schoolSeason') || 'off');
 document.querySelectorAll('[data-animations]').forEach((b) => b.addEventListener('click', () => {
   const enabled = b.dataset.animations === 'on';
   applyAnimations(enabled);
@@ -1345,6 +1493,7 @@ function currentSettingsSnapshot() {
     animations: localStorage.getItem('schoolAnimations') !== 'off',
     radius: localStorage.getItem('schoolRadius') || 'large',
     accent: localStorage.getItem('schoolAccent') || '#4f46e5',
+    season: localStorage.getItem('schoolSeason') || 'off',
   };
 }
 function persistUserSettings() {
@@ -1364,6 +1513,7 @@ function applyAccountSettings(settings) {
   localStorage.setItem('schoolAnimations', settings.animations === false ? 'off' : 'on');
   localStorage.setItem('schoolRadius', settings.radius || 'large');
   localStorage.setItem('schoolAccent', settings.accent || '#4f46e5');
+  localStorage.setItem('schoolSeason', settings.season || 'off');
   applyFontSize(settings.fontSize || 16);
   applyBg(settings.bg || '#f5f7ff');
   applyMode(settings.mode || 'auto');
@@ -1371,6 +1521,7 @@ function applyAccountSettings(settings) {
   applyAnimations(settings.animations !== false);
   applyRadius(settings.radius || 'large');
   applyAccent(settings.accent || '#4f46e5');
+  applySeason(settings.season || 'off');
 }
 
 // ---------- Password hashing ----------
