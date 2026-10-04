@@ -60,6 +60,9 @@
         </div>
       </div>
     </header>
+    <nav class="relative mb-6 hidden w-fit max-w-full gap-1 overflow-x-auto rounded-2xl border border-line bg-card p-1 shadow-[0_4px_15px_var(--shadow)]" id="toolsNav" aria-label="Przypięte narzędzia">
+      <span class="absolute rounded-[10px] bg-primary transition-all duration-300 ease-out" id="toolsNavPill"></span>
+    </nav>
 
     <section class="view" id="home">
       <h1 class="mb-1.5 text-[clamp(1.7em,4vw,2.5em)] font-extrabold leading-[1.08] tracking-tight">Dzień dobry!</h1>
@@ -755,7 +758,7 @@
       </label>
       <p class="mt-1 text-xs text-muted" id="toolSettingsPinNote"></p>
       <div class="mt-6 flex items-center justify-between gap-3">
-        <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-red-600" type="button" id="toolSettingsDelete">Usuń narzędzie</button>
+        <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-red-600" type="button" id="toolSettingsDelete"><i data-icon="trash"></i> <span>Usuń narzędzie</span></button>
         <button class="rounded-xl bg-primary px-5 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" type="button" id="toolSettingsDone">Gotowe</button>
       </div>
     </div>
@@ -838,6 +841,6 @@
   </div>
 
   <canvas class="pointer-events-none fixed inset-0 z-[5] hidden h-full w-full" id="seasonCanvas" aria-hidden="true"></canvas>
-  <script type="module" src="script.js?v=20261004l"></script>
+  <script type="module" src="script.js?v=20261004m"></script>
 </body>
 </html>
