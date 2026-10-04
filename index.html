@@ -209,22 +209,27 @@
       <div class="grid gap-4 lg:grid-cols-2">
         <div class="rounded-[22px] border border-line bg-card p-[22px] text-center shadow-[0_7px_22px_var(--shadow)]">
           <input class="mx-auto mb-1 block rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-[1.2em] font-bold tracking-tight outline-primary focus:border-line focus:bg-app" id="pickerScreenLabel" maxlength="40" placeholder="Losowanie osoby" />
+          <div class="inline-flex rounded-xl border border-line bg-app p-0.5 text-sm font-bold mt-1" role="group" aria-label="Widok" data-layout-switch>
+            <button type="button" class="rounded-[9px] px-3 py-1.5" data-layout="simple" title="Tylko losowanie i wynik">Prosty</button>
+            <button type="button" class="rounded-[9px] px-3 py-1.5" data-layout="full" title="Wszystkie panele i ustawienia">Pełny</button>
+          </div>
+          <p class="mt-3 text-sm font-bold text-muted" data-simple-only id="pickerClassName"></p>
           <div class="my-8">
             <div class="min-h-[1.2em] break-words text-[clamp(2em,9vw,4em)] font-black" id="pickerResult">—</div>
           </div>
           <button class="rounded-xl bg-primary px-8 py-3 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="pickerDraw">Losuj</button>
           <p class="mt-4 text-sm text-muted" id="pickerInfo"></p>
         </div>
-        <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
+        <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" data-technical>
           <div data-class-bar class="mb-5">
             <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Klasa</h3>
             <div class="flex items-center gap-2">
               <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
-              <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
-              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę"><i data-icon="pencil"></i></button>
-              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę"><i data-icon="pin"></i></button>
+              <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-technical data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-technical data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę"><i data-icon="pencil"></i></button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-technical data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę"><i data-icon="pin"></i></button>
             </div>
-            <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
+            <p class="mt-1.5 text-xs text-muted" data-technical data-class-summary></p>
           </div>
           <div class="flex items-center justify-between gap-2">
             <h3 class="text-sm font-bold uppercase tracking-wide text-muted">Ostatnio wylosowani</h3>
@@ -245,11 +250,11 @@
             <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Klasa</h3>
             <div class="flex items-center gap-2">
               <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
-              <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
-              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę"><i data-icon="pencil"></i></button>
-              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę"><i data-icon="pin"></i></button>
+              <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-technical data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-technical data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę"><i data-icon="pencil"></i></button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-technical data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę"><i data-icon="pin"></i></button>
             </div>
-            <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
+            <p class="mt-1.5 text-xs text-muted" data-technical data-class-summary></p>
           </div>
           <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Podział</h3>
           <div class="flex flex-wrap items-center gap-2">
@@ -279,34 +284,38 @@
               <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Klasa</h3>
               <div class="flex items-center gap-2">
                 <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
-                <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
-                <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę"><i data-icon="pencil"></i></button>
-                <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę"><i data-icon="pin"></i></button>
+                <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-technical data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
+                <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-technical data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę"><i data-icon="pencil"></i></button>
+                <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-technical data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę"><i data-icon="pin"></i></button>
               </div>
-              <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
+              <p class="mt-1.5 text-xs text-muted" data-technical data-class-summary></p>
             </div>
           </div>
           <div class="flex flex-wrap content-start items-center gap-2 lg:justify-end">
+            <div class="inline-flex rounded-xl border border-line bg-app p-0.5 text-sm font-bold" role="group" aria-label="Widok" data-layout-switch>
+            <button type="button" class="rounded-[9px] px-3 py-1.5" data-layout="simple" title="Tylko losowanie i wynik">Prosty</button>
+            <button type="button" class="rounded-[9px] px-3 py-1.5" data-layout="full" title="Wszystkie panele i ustawienia">Pełny</button>
+          </div>
             <button class="rounded-xl bg-primary px-5 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="seatDraw">Losuj miejsca</button>
             <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-muted" id="seatClear">Wyczyść plan</button>
-            <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-primary" id="seatEditToggle">Edytuj układ</button>
-            <label class="inline-flex cursor-pointer select-none items-center gap-2 rounded-xl bg-app px-3.5 py-2.5 text-sm font-bold text-ink" title="Wyłączone: numery rzędów liczone automatycznie z położenia stolików. Włączone: sam wpisujesz numer każdego stolika.">
+            <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-primary" id="seatEditToggle" data-technical>Edytuj układ</button>
+            <label data-technical class="inline-flex cursor-pointer select-none items-center gap-2 rounded-xl bg-app px-3.5 py-2.5 text-sm font-bold text-ink" title="Wyłączone: numery rzędów liczone automatycznie z położenia stolików. Włączone: sam wpisujesz numer każdego stolika.">
               <input class="peer sr-only" type="checkbox" id="seatManualToggle" />
               <span class="relative h-5 w-9 shrink-0 rounded-full bg-line transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-4 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-primary"></span>
               Własne numery
             </label>
           </div>
         </div>
-        <div class="mb-3 flex flex-wrap items-center gap-2">
+        <div class="mb-3 flex flex-wrap items-center gap-2" data-technical>
           <span class="text-sm font-bold uppercase tracking-wide text-muted">Schematy</span>
           <select class="min-w-0 max-w-full flex-1 rounded-lg border border-line bg-app px-3 py-1.5 text-sm text-ink sm:max-w-xs" id="seatLayoutSelect" aria-label="Zapisane schematy układu"></select>
           <button class="rounded-lg bg-primary px-3 py-1.5 text-sm font-extrabold text-white disabled:opacity-40" id="seatLayoutUse">Użyj</button>
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-primary disabled:opacity-40" id="seatLayoutSave">Zapisz obecny układ…</button>
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-red-600 disabled:opacity-40" id="seatLayoutDelete">Usuń schemat</button>
         </div>
-        <p class="mb-3 text-sm text-muted" id="seatInfo"></p>
+        <p class="mb-3 text-sm text-muted" id="seatInfo" data-technical></p>
         <p class="mb-3 hidden rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" id="seatError"></p>
-        <div class="mb-3 hidden flex-wrap items-center gap-2 rounded-xl border border-dashed border-line p-2.5" id="seatEditBar">
+        <div class="mb-3 hidden flex-wrap items-center gap-2 rounded-xl border border-dashed border-line p-2.5" id="seatEditBar" data-technical>
           <button class="rounded-lg bg-primary px-3 py-1.5 text-sm font-extrabold text-white" id="seatAddDesk">+ Stolik</button>
           <button class="rounded-lg bg-primary px-3 py-1.5 text-sm font-extrabold text-white" id="seatAddRow">+ Rząd (6)</button>
           <span class="mx-1 h-5 w-px bg-line"></span>
@@ -841,6 +850,6 @@
   </div>
 
   <canvas class="pointer-events-none fixed inset-0 z-[5] hidden h-full w-full" id="seasonCanvas" aria-hidden="true"></canvas>
-  <script type="module" src="script.js?v=20261004m"></script>
+  <script type="module" src="script.js?v=20261004o"></script>
 </body>
 </html>

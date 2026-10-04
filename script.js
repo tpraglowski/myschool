@@ -2752,18 +2752,37 @@ function pickerBlocked(cls) {
   const cooldown = Math.min(PICK_COOLDOWN, Math.max(0, cls.students.length - 1));
   return { cooldown, names: cooldown > 0 ? recentPicks(cls).slice(-cooldown) : [] };
 }
+// "Widok" switch (Prosty / Pełny) of the picker and seating tools, saved per tool.
+function applyToolLayout(screenId, tool) {
+  const screen = document.querySelector(`#${screenId}`);
+  const simple = !!tool.simpleView;
+  screen.classList.toggle('layout-simple', simple);
+  screen.querySelectorAll('[data-layout]').forEach((b) => setSelected(b, (b.dataset.layout === 'simple') === simple, ['bg-primary', 'text-white'], ['text-muted']));
+}
+['pickerScreen', 'seatingScreen'].forEach((screenId) => {
+  document.querySelectorAll(`#${screenId} [data-layout]`).forEach((b) => b.addEventListener('click', () => {
+    const tool = activeClassTool();
+    if (!tool) return;
+    tool.simpleView = b.dataset.layout === 'simple';
+    if (tool.simpleView && screenId === 'seatingScreen') { state.seatEditing = false; state.selectedDesk = null; }
+    saveTeacherTools();
+    renderToolScreen();
+  }));
+});
 function renderPickerScreen() {
   const tool = activeClassTool();
   if (!tool) { show('teacherTools'); return; }
   const cls = toolClass(tool);
   document.querySelector('#pickerScreenLabel').value = tool.label || '';
+  applyToolLayout('pickerScreen', tool);
+  document.querySelector('#pickerClassName').textContent = cls ? `Klasa: ${cls.name}` : '';
   renderClassBars();
   document.querySelector('#pickerResult').textContent = state.pickerResult[tool.id] || '—';
   const info = document.querySelector('#pickerInfo');
   const recentEl = document.querySelector('#pickerRecent');
   document.querySelector('#pickerClearRecent').disabled = !cls;
   if (!cls || !cls.students.length) {
-    info.textContent = !cls ? 'Wybierz klasę albo dodaj nową (+).' : 'Ta klasa nie ma jeszcze uczniów — kliknij ✎ i wpisz listę.';
+    info.textContent = !cls ? (tool.simpleView ? 'Nie wybrano klasy — przełącz na widok „Pełny”, żeby ją wybrać.' : 'Wybierz klasę albo dodaj nową (+).') : 'Ta klasa nie ma jeszcze uczniów — kliknij ✎ i wpisz listę.';
     recentEl.innerHTML = '';
     return;
   }
@@ -3098,6 +3117,7 @@ function renderSeatingScreen() {
   if (!tool) { show('teacherTools'); return; }
   const cls = toolClass(tool);
   document.querySelector('#seatingScreenLabel').value = tool.label || '';
+  applyToolLayout('seatingScreen', tool);
   renderClassBars();
   renderSeatLayoutBar();
   document.querySelector('#seatEditToggle').textContent = state.seatEditing ? 'Gotowe' : 'Edytuj układ';
@@ -3156,9 +3176,10 @@ async function drawSeating() {
   const cls = toolClass(tool);
   const error = document.querySelector('#seatError');
   const fail = (message) => { error.textContent = message; error.classList.remove('hidden'); };
-  if (!cls) return fail('Wybierz klasę albo dodaj nową (+).');
-  if (!cls.students.length) return fail('Ta klasa nie ma jeszcze uczniów — kliknij ✎ i wpisz listę.');
-  if (tool.desks.length < cls.students.length) return fail(`Za mało stolików: ${cls.students.length} uczniów, ${tool.desks.length} stolików — dodaj stoliki w układzie.`);
+  if (!cls) return fail(tool.simpleView ? 'Wybierz klasę z listy.' : 'Wybierz klasę albo dodaj nową (+).');
+  const fullHint = tool.simpleView ? ' Przełącz na widok „Pełny”.' : '';
+  if (!cls.students.length) return fail(`Ta klasa nie ma jeszcze uczniów — kliknij ✎ i wpisz listę.${fullHint}`);
+  if (tool.desks.length < cls.students.length) return fail(`Za mało stolików: ${cls.students.length} uczniów, ${tool.desks.length} stolików — dodaj stoliki w układzie.${fullHint}`);
   const { rows, rowCount } = deskRows(tool.desks, tool.manualRows);
   const missingRow = cls.seatRows.find(({ row }) => !rows.has(row));
   if (missingRow) return fail(`Reguła „${missingRow.name} → rząd ${missingRow.row}” nie pasuje do układu — ${tool.manualRows ? `żaden stolik nie ma numeru ${missingRow.row}` : `liczba rzędów stolików: ${rowCount}`}.`);

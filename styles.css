@@ -54,6 +54,14 @@ body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in 
 .icon { display: inline-block; width: 1.1em; height: 1.1em; vertical-align: -0.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 [data-icon] { display: inline-flex; align-items: center; }
 
+/* Teacher tool "Widok": simple = only what's needed to draw (technical panels, rule/layout
+   editing, row numbers hidden); full = everything. script.js toggles .layout-simple. */
+[data-simple-only] { display: none; }
+.layout-simple [data-simple-only] { display: block; }
+.layout-simple [data-technical] { display: none !important; }
+#pickerScreen.layout-simple > .grid { grid-template-columns: minmax(0, 640px); justify-content: center; }
+#seatingScreen.layout-simple .seat-row-no { display: none; }
+
 /* Fade-in used on the view that becomes active */
 @keyframes appear {
   from { opacity: 0; transform: translateY(8px); }
