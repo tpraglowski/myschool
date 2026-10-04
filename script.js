@@ -3097,7 +3097,7 @@ const seatBoardEl = document.querySelector('#seatBoard');
 // largest size at which its longest line (first name / surname) still fits the desk.
 function seatFontSize(name) {
   const longest = Math.max(...seatName(name).split('\n').map((line) => line.length));
-  return Math.round(clamp(8.4 / (Math.max(longest, 1) * 0.58), 1.15, 3.4) * 100) / 100;
+  return Math.round(clamp(8.4 / (Math.max(longest, 1) * 0.58), 1.15, 2.4) * 100) / 100;
 }
 // Simple view: scale the board so the whole room AND the "Losuj miejsca" button fit on the
 // screen at once — the page never has to be scrolled.
