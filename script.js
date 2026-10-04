@@ -105,7 +105,7 @@ const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubj
 const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
 const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], adminNote: '', teacherTools: [], lastTimerSeconds: 300, teacherClasses: [], pickHistory: {}, ...a }));
 
-const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'notifications', 'teacherClasses'];
+const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'notifications', 'teacherClasses', 'seatLayouts'];
 const seedValue = {
   subjectsByClass: normalizeSubjectsByClass(legacySubjectsByClass || { '1A': legacySubjects || defaultSubjects }),
   starterSubjectsByGrade: legacyStarterByGrade || Object.fromEntries(
@@ -115,6 +115,7 @@ const seedValue = {
   announcements: normalizeAnnouncements(legacyAnnouncements || defaultAnnouncements),
   notifications: [],
   teacherClasses: [],
+  seatLayouts: [],
 };
 
 const state = {
@@ -124,6 +125,8 @@ const state = {
   announcements: [],
   notifications: [],
   teacherClasses: [],
+  seatLayouts: [],
+  seatLayoutId: null,
   activeSubject: null,
   activeTemplateSubject: null,
   mode: 'subject',
@@ -184,6 +187,7 @@ function applyStoreValue(key, value) {
   else if (key === 'announcements') state.announcements = normalizeAnnouncements(value);
   else if (key === 'notifications') state.notifications = value || [];
   else if (key === 'teacherClasses') state.teacherClasses = (value || []).map((c) => ({ seatApart: [], seatRows: [], ...c }));
+  else if (key === 'seatLayouts') state.seatLayouts = value || [];
 }
 
 function renderAfterStoreChange(key) {
@@ -209,6 +213,8 @@ function renderAfterStoreChange(key) {
     // closes if its class was just deleted).
     if (editingClassId && !editingClass()) classEditorDialog.close();
     if (isTeacher() && state.activeTool) renderToolScreen();
+  } else if (key === 'seatLayouts') {
+    if (isTeacher() && activeClassTool()?.type === 'seating') renderSeatLayoutBar();
   }
 }
 
@@ -2628,6 +2634,20 @@ function seatStudents(students, desks, seatRows, seatApart) {
   return null;
 }
 
+// Saved layouts ("schematy") are shared by every teacher, like classes: they live in the
+// store/seatLayouts document as [{ id, name, desks: [{x, y, angle}], createdBy }]. Using
+// one copies its desks (with fresh ids) into the tool, so later edits to the tool never
+// change the shared schema. Each write is a small transaction on the server's list, so
+// two teachers saving at once don't overwrite each other.
+const seatLayouts = () => state.seatLayouts;
+function writeSeatLayouts(mutator) {
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(storeDoc('seatLayouts'));
+    tx.set(storeDoc('seatLayouts'), { value: mutator(snap.exists() ? (snap.data().value || []) : []) });
+  }).catch((err) => console.error('Nie udało się zapisać schematu', err));
+}
+const canDeleteLayout = (layout) => !!layout && (isAdmin() || normalise(layout.createdBy || '') === normalise(currentUser?.name || ''));
+
 const seatBoardEl = document.querySelector('#seatBoard');
 const seatTool = () => activeClassTool();
 const seatPlanFor = (tool, cls) => (cls && tool.seatPlans?.[cls.id]) || {};
@@ -2645,6 +2665,7 @@ function renderSeatBoard(animate = false) {
     return `<div class="seat-desk${name ? ' filled' : ''}${selected ? ' selected' : ''}${state.seatEditing ? ' editable' : ''}" data-desk="${d.id}" style="left:${d.x}%;top:${(d.y / BOARD_H) * 100}%;width:${DESK_W}%;height:${(DESK_H / BOARD_H) * 100}%">
       <svg class="seat-shape" viewBox="0 0 74 68" preserveAspectRatio="none" style="transform:rotate(${d.angle || 0}deg)"><path d="${DESK_PATH}"/></svg>
       <span class="seat-label"><span class="seat-name">${label}</span></span>
+      ${state.seatEditing ? '<button type="button" class="seat-remove" data-desk-del title="Usuń stolik" aria-label="Usuń stolik">×</button>' : ''}
     </div>`;
   }).join('');
 }
@@ -2654,9 +2675,11 @@ function renderSeatingScreen() {
   const cls = toolClass(tool);
   document.querySelector('#seatingScreenLabel').value = tool.label || '';
   renderClassBars();
+  renderSeatLayoutBar();
   document.querySelector('#seatEditToggle').textContent = state.seatEditing ? 'Gotowe' : 'Edytuj układ';
   document.querySelector('#seatEditBar').classList.toggle('hidden', !state.seatEditing);
   document.querySelector('#seatEditBar').classList.toggle('flex', state.seatEditing);
+  document.querySelector('#seatDelAll').disabled = !tool.desks.length;
   ['#seatRotL', '#seatRotR', '#seatDup', '#seatDel'].forEach((sel) => { document.querySelector(sel).disabled = !state.selectedDesk; });
   document.querySelector('#seatClear').disabled = !cls || !Object.keys(seatPlanFor(tool, cls)).length;
   const { rowCount } = deskRows(tool.desks);
@@ -2783,14 +2806,85 @@ document.querySelector('#seatDup').addEventListener('click', () => {
   state.selectedDesk = copy.id;
   seatLayoutChanged();
 });
-document.querySelector('#seatDel').addEventListener('click', () => {
+function removeDesk(id) {
   const tool = seatTool();
-  const desk = selectedDesk();
-  if (!tool || !desk) return;
-  tool.desks = tool.desks.filter((d) => d.id !== desk.id);
-  Object.values(tool.seatPlans || {}).forEach((plan) => { delete plan[desk.id]; });
+  if (!tool) return;
+  tool.desks = tool.desks.filter((d) => d.id !== id);
+  Object.values(tool.seatPlans || {}).forEach((plan) => { delete plan[id]; });
+  if (state.selectedDesk === id) state.selectedDesk = null;
+  seatLayoutChanged();
+}
+document.querySelector('#seatDel').addEventListener('click', () => { if (state.selectedDesk) removeDesk(state.selectedDesk); });
+document.querySelector('#seatDelAll').addEventListener('click', () => {
+  const tool = seatTool();
+  if (!tool || !tool.desks.length || !confirm('Usunąć wszystkie stoliki? Zapisane plany rozsadzenia też zostaną usunięte (zapisane schematy zostają).')) return;
+  tool.desks = [];
+  tool.seatPlans = {};
   state.selectedDesk = null;
   seatLayoutChanged();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Delete' || !state.seatEditing || !state.selectedDesk) return;
+  if (document.querySelector('#seatingScreen').classList.contains('hidden') || e.target.closest?.('input, textarea, select')) return;
+  removeDesk(state.selectedDesk);
+});
+
+// -- Shared layouts --
+function renderSeatLayoutBar() {
+  const select = document.querySelector('#seatLayoutSelect');
+  const layouts = seatLayouts();
+  if (!layouts.some((l) => l.id === state.seatLayoutId)) state.seatLayoutId = layouts[0]?.id || null;
+  select.innerHTML = layouts.length
+    ? layouts.map((l) => `<option value="${l.id}"${l.id === state.seatLayoutId ? ' selected' : ''}>${escapeHtml(l.name)} (${l.desks.length})${l.createdBy ? ` — ${escapeHtml(l.createdBy)}` : ''}</option>`).join('')
+    : '<option value="">Brak zapisanych schematów</option>';
+  select.disabled = !layouts.length;
+  const chosen = layouts.find((l) => l.id === state.seatLayoutId);
+  document.querySelector('#seatLayoutUse').disabled = !chosen;
+  const del = document.querySelector('#seatLayoutDelete');
+  del.disabled = !canDeleteLayout(chosen);
+  del.title = chosen && !canDeleteLayout(chosen) ? 'Schemat może usunąć tylko jego autor lub administrator' : 'Usuń schemat dla wszystkich';
+  document.querySelector('#seatLayoutSave').disabled = !seatTool()?.desks.length;
+}
+document.querySelector('#seatLayoutSelect').addEventListener('change', (e) => { state.seatLayoutId = e.target.value || null; renderSeatLayoutBar(); });
+document.querySelector('#seatLayoutUse').addEventListener('click', () => {
+  const tool = seatTool();
+  const layout = seatLayouts().find((l) => l.id === state.seatLayoutId);
+  if (!tool || !layout) return;
+  if (!confirm(`Użyć schematu „${layout.name}”? Obecny układ stolików i zapisane plany rozsadzenia w tym narzędziu zostaną zastąpione.`)) return;
+  tool.desks = layout.desks.map((d) => ({ id: crypto.randomUUID(), x: d.x, y: d.y, angle: d.angle || 0 }));
+  tool.seatPlans = {};
+  state.selectedDesk = null;
+  seatLayoutChanged();
+});
+document.querySelector('#seatLayoutSave').addEventListener('click', async () => {
+  const tool = seatTool();
+  if (!tool || !tool.desks.length) return;
+  const name = (prompt('Nazwa schematu (widoczny dla wszystkich nauczycieli):') || '').trim().slice(0, 40);
+  if (!name) return;
+  const mine = normalise(currentUser?.name || '');
+  const same = seatLayouts().find((l) => normalise(l.name) === normalise(name));
+  if (same && normalise(same.createdBy || '') !== mine && !isAdmin()) {
+    alert('Schemat o takiej nazwie już istnieje (dodał go ktoś inny) — wybierz inną nazwę.');
+    return;
+  }
+  if (same && !confirm(`Schemat „${same.name}” już istnieje. Zastąpić go obecnym układem?`)) return;
+  const layout = {
+    id: same?.id || crypto.randomUUID(),
+    name,
+    createdBy: same?.createdBy || currentUser?.name || '',
+    desks: tool.desks.map((d) => ({ x: Math.round(d.x * 100) / 100, y: Math.round(d.y * 100) / 100, angle: d.angle || 0 })),
+  };
+  state.seatLayouts = same ? seatLayouts().map((l) => (l.id === layout.id ? layout : l)) : [...seatLayouts(), layout];
+  state.seatLayoutId = layout.id;
+  renderSeatLayoutBar();
+  await writeSeatLayouts((list) => (list.some((l) => l.id === layout.id) ? list.map((l) => (l.id === layout.id ? layout : l)) : [...list, layout]));
+});
+document.querySelector('#seatLayoutDelete').addEventListener('click', async () => {
+  const layout = seatLayouts().find((l) => l.id === state.seatLayoutId);
+  if (!canDeleteLayout(layout) || !confirm(`Usunąć schemat „${layout.name}” dla wszystkich nauczycieli?`)) return;
+  state.seatLayouts = seatLayouts().filter((l) => l.id !== layout.id);
+  renderSeatLayoutBar();
+  await writeSeatLayouts((list) => list.filter((l) => l.id !== layout.id));
 });
 document.querySelector('#seatDefault').addEventListener('click', () => {
   const tool = seatTool();
@@ -2805,6 +2899,12 @@ document.querySelector('#seatDefault').addEventListener('click', () => {
 let seatDrag = null;
 seatBoardEl.addEventListener('pointerdown', (e) => {
   if (!state.seatEditing) return;
+  const removeBtn = e.target.closest('[data-desk-del]');
+  if (removeBtn) {
+    e.preventDefault();
+    removeDesk(removeBtn.closest('[data-desk]').dataset.desk);
+    return;
+  }
   const el = e.target.closest('[data-desk]');
   const desk = el && seatTool()?.desks.find((d) => d.id === el.dataset.desk);
   if (!desk) return;

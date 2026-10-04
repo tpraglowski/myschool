@@ -285,6 +285,13 @@
             <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-primary" id="seatEditToggle">Edytuj układ</button>
           </div>
         </div>
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <span class="text-sm font-bold uppercase tracking-wide text-muted">Schematy</span>
+          <select class="min-w-0 max-w-full flex-1 rounded-lg border border-line bg-app px-3 py-1.5 text-sm text-ink sm:max-w-xs" id="seatLayoutSelect" aria-label="Zapisane schematy układu"></select>
+          <button class="rounded-lg bg-primary px-3 py-1.5 text-sm font-extrabold text-white disabled:opacity-40" id="seatLayoutUse">Użyj</button>
+          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-primary disabled:opacity-40" id="seatLayoutSave">Zapisz obecny układ…</button>
+          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-red-600 disabled:opacity-40" id="seatLayoutDelete">Usuń schemat</button>
+        </div>
         <p class="mb-3 text-sm text-muted" id="seatInfo"></p>
         <p class="mb-3 hidden rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" id="seatError"></p>
         <div class="mb-3 hidden flex-wrap items-center gap-2 rounded-xl border border-dashed border-line p-2.5" id="seatEditBar">
@@ -295,9 +302,10 @@
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatRotR" title="Obróć w prawo" aria-label="Obróć w prawo">↻</button>
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatDup">Powiel</button>
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-red-600 disabled:opacity-40" id="seatDel">Usuń</button>
+          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-red-600 disabled:opacity-40" id="seatDelAll">Usuń wszystkie</button>
           <span class="mx-1 h-5 w-px bg-line"></span>
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-muted" id="seatDefault">Układ domyślny</button>
-          <span class="w-full text-xs text-muted">Przeciągnij stolik, żeby go przesunąć; kliknij, żeby go zaznaczyć (obracanie, powielanie, usuwanie).</span>
+          <span class="w-full text-xs text-muted">Przeciągnij stolik, żeby go przesunąć; kliknij, żeby go zaznaczyć (obracanie, powielanie). Każdy stolik usuniesz przez × w rogu, przyciskiem „Usuń” albo klawiszem Delete.</span>
         </div>
         <div class="overflow-x-auto">
           <div class="relative w-full min-w-[720px] select-none rounded-2xl border border-line bg-app" id="seatBoard" style="aspect-ratio:100/68"></div>

@@ -70,6 +70,7 @@ body.radius-large { --card-radius: 25px; --panel-radius: 22px; }
 .seat-shape path { fill: var(--seat-fill, var(--card)); stroke: var(--line); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .seat-desk.filled { --seat-fill: color-mix(in srgb, var(--primary) 16%, var(--card)); }
 .seat-desk.selected .seat-shape path { stroke: var(--primary); stroke-width: 3; }
+.seat-remove { position: absolute; top: -7px; right: -7px; z-index: 2; width: 22px; height: 22px; border-radius: 999px; border: 0; background: #dc2626; color: #fff; font-size: 15px; font-weight: 800; line-height: 1; display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 6px #0004; }
 .seat-label { position: absolute; inset: 0; display: grid; place-items: center; padding: 0 3px; text-align: center; font-size: .68rem; font-weight: 700; line-height: 1.15; pointer-events: none; }
 .seat-name { display: inline-block; white-space: pre-line; }
 .seat-row-no { color: var(--muted); font-weight: 600; opacity: .7; }
