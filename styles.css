@@ -40,6 +40,13 @@ body.season-spring { --bg: #f2fbef; --card: #ffffff; --line: #d9eed2; --muted: #
 body.season-spring.dark { --bg: #0f1c13; --card: #17291b; --line: #2b4731; --ink: #eef9ee; --muted: #a3c2a4; --primary: #5fd17c; }
 body.season-summer { --bg: #effbff; --card: #ffffff; --line: #cfeaf2; --muted: #4f7482; --primary: #0a9fc0; }
 body.season-summer.dark { --bg: #0c1d24; --card: #142a33; --line: #254552; --ink: #eaf8fc; --muted: #9bc0cc; --primary: #38cde8; }
+/* The logo follows the season too (indigo → violet when the effect is off). */
+.logo-mark { transition: box-shadow .3s; }
+body.season-autumn .logo-mark { background-image: linear-gradient(to bottom right, #c2410c, #f59e0b); box-shadow: 0 8px 18px #d9641a55; }
+body.season-winter .logo-mark { background-image: linear-gradient(to bottom right, #2563a8, #8fd3fb); box-shadow: 0 8px 18px #3a82c455; }
+body.season-spring .logo-mark { background-image: linear-gradient(to bottom right, #15803d, #f472b6); box-shadow: 0 8px 18px #2e9f4f55; }
+body.season-summer .logo-mark { background-image: linear-gradient(to bottom right, #0891b2, #fbbf24); box-shadow: 0 8px 18px #0a9fc055; }
+
 /* The pale-indigo back buttons are hard-coded in the markup; tint them with the palette instead. */
 body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in srgb, var(--primary) 14%, var(--card)); }
 
