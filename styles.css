@@ -59,6 +59,21 @@ body.radius-large { --card-radius: 25px; --panel-radius: 22px; }
 .chip-hidden { opacity: 0; }
 .chip-drop-final { animation: nameDropFinal .32s cubic-bezier(.34, 1.56, .64, 1) forwards; }
 
+/* Seating plan tool: a free-form classroom board. Desks are rounded trapezoids (path
+   drawn in script.js), absolutely positioned in board percentages; the label stays
+   upright while only the shape rotates. */
+.seat-front { position: absolute; left: 30%; right: 30%; top: 1.5%; height: 5.5%; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: var(--card); font-size: .7rem; font-weight: 800; letter-spacing: .18em; }
+.seat-desk { position: absolute; transform: translate(-50%, -50%); }
+.seat-desk.editable { cursor: grab; touch-action: none; }
+.seat-desk.editable:active { cursor: grabbing; }
+.seat-shape { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.seat-shape path { fill: var(--seat-fill, var(--card)); stroke: var(--line); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.seat-desk.filled { --seat-fill: color-mix(in srgb, var(--primary) 16%, var(--card)); }
+.seat-desk.selected .seat-shape path { stroke: var(--primary); stroke-width: 3; }
+.seat-label { position: absolute; inset: 0; display: grid; place-items: center; padding: 0 3px; text-align: center; font-size: .68rem; font-weight: 700; line-height: 1.15; pointer-events: none; }
+.seat-name { display: inline-block; white-space: pre-line; }
+.seat-row-no { color: var(--muted); font-weight: 600; opacity: .7; }
+
 /* "Animacje: Wyłączone" setting — turns off motion app-wide without touching layout. */
 body.no-animations,
 body.no-animations * {

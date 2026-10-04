@@ -139,6 +139,8 @@ const state = {
   activeTool: null,
   pickerResult: {},
   groupsResult: {},
+  seatEditing: false,
+  selectedDesk: null,
   viewingClassroom: null,
   scheduleDay: currentWeekday(),
   adminScheduleDay: currentWeekday(),
@@ -181,7 +183,7 @@ function applyStoreValue(key, value) {
   else if (key === 'lessonsByClass') state.lessonsByClass = normalizeLessonsByClass(value);
   else if (key === 'announcements') state.announcements = normalizeAnnouncements(value);
   else if (key === 'notifications') state.notifications = value || [];
-  else if (key === 'teacherClasses') state.teacherClasses = value || [];
+  else if (key === 'teacherClasses') state.teacherClasses = (value || []).map((c) => ({ seatApart: [], seatRows: [], ...c }));
 }
 
 function renderAfterStoreChange(key) {
@@ -365,7 +367,7 @@ function setSelected(el, isSelected, onClasses, offClasses) {
 }
 
 // ---------- Navigation ----------
-const navParent = { schedule: 'home', changes: 'home', events: 'home', admin: 'home', detail: 'competences', timerScreen: 'teacherTools', pickerScreen: 'teacherTools', groupsScreen: 'teacherTools' };
+const navParent = { schedule: 'home', changes: 'home', events: 'home', admin: 'home', detail: 'competences', timerScreen: 'teacherTools', pickerScreen: 'teacherTools', groupsScreen: 'teacherTools', seatingScreen: 'teacherTools' };
 function show(id) {
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== id));
   // Teacher Tools can be edited from the separate timerScreen (rename, change
@@ -1478,6 +1480,8 @@ function logout(message) {
   editingClassId = null;
   state.pickerResult = {};
   state.groupsResult = {};
+  state.seatEditing = false;
+  state.selectedDesk = null;
   document.querySelector('#headerTimerIndicator').classList.add('hidden');
   document.querySelector('#loginLayer').classList.remove('hidden');
   screen('startScreen');
@@ -1795,6 +1799,7 @@ const toolTypes = [
   { type: 'timer', icon: '⏱', name: 'Timer', description: 'Odliczanie czasu na pełnym ekranie' },
   { type: 'picker', icon: '🎲', name: 'Losowanie osoby', description: 'Losuje ucznia z klasy; wylosowany nie wypadnie przez następne 5 losowań' },
   { type: 'groups', icon: '👥', name: 'Losowanie grup', description: 'Dzieli klasę na grupy, z możliwością rozdzielenia wybranych osób' },
+  { type: 'seating', icon: '🪑', name: 'Rozsadzanie osób', description: 'Losowo sadza klasę przy stolikach (miejsca, ławki): własny układ stolików, wybrany rząd dla osoby i „nie obok”' },
 ];
 const toolTypeInfo = (type) => toolTypes.find((t) => t.type === type) || toolTypes[0];
 const toolPickerDialog = document.querySelector('#toolPicker');
@@ -1825,7 +1830,8 @@ function addTeacherTool(type) {
   const account = currentAccount();
   const tool = { id: crypto.randomUUID(), type, label: '' };
   if (type === 'timer') tool.duration = account?.lastTimerSeconds || 300;
-  if (type === 'picker' || type === 'groups') tool.classId = teacherClasses().length === 1 ? teacherClasses()[0].id : null;
+  if (type === 'picker' || type === 'groups' || type === 'seating') tool.classId = teacherClasses().length === 1 ? teacherClasses()[0].id : null;
+  if (type === 'seating') Object.assign(tool, { desks: defaultDesks(), seatPlans: {} });
   if (type === 'groups') Object.assign(tool, { groupMode: 'count', groupValue: 2 });
   teacherToolsFor().push(tool);
   saveTeacherTools();
@@ -1850,6 +1856,7 @@ function openTool(id) {
   if (!tool) return;
   if (tool.type === 'picker') openPickerScreen(id);
   else if (tool.type === 'groups') openGroupsScreen(id);
+  else if (tool.type === 'seating') openSeatingScreen(id);
   else openTimerScreen(id);
 }
 function bindTeacherToolsEvents(el) {
@@ -1994,6 +2001,19 @@ function shuffled(list) {
   }
   return a;
 }
+// The solvers (groups, seating) shuffle inside their innermost loops, millions of times
+// when the rules are unsatisfiable — far too many for crypto.getRandomValues, which made
+// the page freeze for a long time. They use Math.random (plenty for who-sits-where) and
+// give up after SOLVER_BUDGET_MS instead of grinding on.
+const SOLVER_BUDGET_MS = 1200;
+function fastShuffled(list) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 const studentsLabel = (n) => `${n} ${n === 1 ? 'uczeń' : 'uczniów'}`;
 // Classes are shared by every teacher: they live in the store/teacherClasses document
 // (live-synced like lessons and announcements), not on any one teacher's account. Each
@@ -2002,7 +2022,9 @@ const studentsLabel = (n) => `${n} ${n === 1 ? 'uczeń' : 'uczniów'}`;
 // private per teacher is the random-person draw history (account.pickHistory), since
 // one teacher's draws shouldn't lock students out of another teacher's draws.
 const teacherClasses = () => state.teacherClasses;
-const publicClass = ({ id, name, students, apart, createdBy }) => ({ id, name, students, apart: apart || [], createdBy: createdBy || '' });
+const publicClass = ({ id, name, students, apart, seatApart, seatRows, createdBy }) => ({
+  id, name, students, apart: apart || [], seatApart: seatApart || [], seatRows: seatRows || [], createdBy: createdBy || '',
+});
 // Writes are queued so they reach the server in order, and while any is in flight the
 // incoming live snapshots of this document are ignored (they'd be older than our own
 // local edits and would briefly revert them); once the queue drains the latest version
@@ -2039,7 +2061,7 @@ function updateClass(id, mutate) {
   if (local) mutate(local);
   return writeClasses((list) => list.map((c) => {
     if (c.id !== id) return c;
-    const copy = { ...c, students: [...c.students], apart: [...(c.apart || [])] };
+    const copy = { ...c, students: [...c.students], apart: [...(c.apart || [])], seatApart: [...(c.seatApart || [])], seatRows: [...(c.seatRows || [])] };
     mutate(copy);
     return publicClass(copy);
   })).catch((err) => console.error('Nie udało się zapisać klasy', err));
@@ -2047,7 +2069,7 @@ function updateClass(id, mutate) {
 const deleteClassRemote = (id) => writeClasses((list) => list.filter((c) => c.id !== id))
   .catch((err) => console.error('Nie udało się usunąć klasy', err));
 function createClass(fields) {
-  const cls = { id: crypto.randomUUID(), name: `Klasa ${teacherClasses().length + 1}`, students: [], apart: [], createdBy: currentUser?.name || '', ...fields };
+  const cls = { id: crypto.randomUUID(), name: `Klasa ${teacherClasses().length + 1}`, students: [], apart: [], seatApart: [], seatRows: [], createdBy: currentUser?.name || '', ...fields };
   state.teacherClasses = [...state.teacherClasses, cls];
   saveClass(cls);
   return cls;
@@ -2098,6 +2120,7 @@ function renderToolScreen() {
   const tool = activeClassTool();
   if (!tool) return;
   if (tool.type === 'picker') renderPickerScreen();
+  else if (tool.type === 'seating') renderSeatingScreen();
   else renderGroupsScreen();
 }
 function renderClassBars() {
@@ -2111,7 +2134,7 @@ function renderClassBars() {
     bar.querySelector('[data-class-select]').value = cls ? cls.id : '';
     bar.querySelector('[data-class-edit]').disabled = !cls;
     bar.querySelector('[data-class-summary]').textContent = cls
-      ? `${studentsLabel(cls.students.length)}${cls.apart.length ? ` · reguł grup: ${cls.apart.length}` : ''}${cls.createdBy ? ` · dodał(a): ${cls.createdBy}` : ''}`
+      ? `${studentsLabel(cls.students.length)}${cls.apart.length ? ` · reguł grup: ${cls.apart.length}` : ''}${cls.seatApart.length + cls.seatRows.length ? ` · reguł miejsc: ${cls.seatApart.length + cls.seatRows.length}` : ''}${cls.createdBy ? ` · dodał(a): ${cls.createdBy}` : ''}`
       : '';
   });
 }
@@ -2168,7 +2191,51 @@ function renderClassEditor() {
     renderClassEditor();
     renderToolScreen();
   }));
+
+  // Seating rules: pairs who shouldn't sit next to each other, and person -> row.
+  document.querySelector('#classSeatApartA').innerHTML = options;
+  document.querySelector('#classSeatApartB').innerHTML = options;
+  if (cls.students.length > 1) document.querySelector('#classSeatApartB').selectedIndex = 1;
+  document.querySelector('#classSeatRowName').innerHTML = options;
+  document.querySelector('#classSeatRowNo').innerHTML = Array.from({ length: SEAT_ROW_MAX }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('');
+  const chip = (text, attr, i) => `<span class="inline-flex items-center gap-1.5 rounded-lg bg-app px-2.5 py-1 text-sm font-bold">${text}<button type="button" class="font-bold text-red-600" ${attr}="${i}" aria-label="Usuń regułę">×</button></span>`;
+  const seatApartList = document.querySelector('#classSeatApartList');
+  seatApartList.innerHTML = cls.seatApart.length ? cls.seatApart.map(({ a, b }, i) => chip(`${escapeHtml(a)} ✕ ${escapeHtml(b)}`, 'data-remove-seat-apart', i)).join('') : '<span class="text-sm text-muted">Brak reguł.</span>';
+  seatApartList.querySelectorAll('[data-remove-seat-apart]').forEach((btn) => btn.addEventListener('click', () => {
+    const { a, b } = cls.seatApart[Number(btn.dataset.removeSeatApart)];
+    updateClass(cls.id, (c) => { c.seatApart = c.seatApart.filter((p) => !(p.a === a && p.b === b)); });
+    renderClassEditor();
+    renderToolScreen();
+  }));
+  const seatRowList = document.querySelector('#classSeatRowList');
+  seatRowList.innerHTML = cls.seatRows.length ? cls.seatRows.map(({ name, row }, i) => chip(`${escapeHtml(name)} → rząd ${row}`, 'data-remove-seat-row', i)).join('') : '<span class="text-sm text-muted">Brak reguł.</span>';
+  seatRowList.querySelectorAll('[data-remove-seat-row]').forEach((btn) => btn.addEventListener('click', () => {
+    const { name, row } = cls.seatRows[Number(btn.dataset.removeSeatRow)];
+    updateClass(cls.id, (c) => { c.seatRows = c.seatRows.filter((p) => !(p.name === name && p.row === row)); });
+    renderClassEditor();
+    renderToolScreen();
+  }));
 }
+document.querySelector('#classSeatApartAdd').addEventListener('click', () => {
+  const cls = editingClass();
+  if (!cls) return;
+  const a = document.querySelector('#classSeatApartA').value;
+  const b = document.querySelector('#classSeatApartB').value;
+  if (!a || !b || a === b) return;
+  updateClass(cls.id, (c) => { if (!c.seatApart.some((p) => (p.a === a && p.b === b) || (p.a === b && p.b === a))) c.seatApart.push({ a, b }); });
+  renderClassEditor();
+  renderToolScreen();
+});
+document.querySelector('#classSeatRowAdd').addEventListener('click', () => {
+  const cls = editingClass();
+  if (!cls) return;
+  const name = document.querySelector('#classSeatRowName').value;
+  const row = Number(document.querySelector('#classSeatRowNo').value);
+  if (!name || !row) return;
+  updateClass(cls.id, (c) => { if (!c.seatRows.some((p) => p.name === name && p.row === row)) c.seatRows.push({ name, row }); });
+  renderClassEditor();
+  renderToolScreen();
+});
 function openClassEditor(id) {
   editingClassId = id;
   renderClassEditor();
@@ -2192,6 +2259,8 @@ document.querySelector('#classNamesInput').addEventListener('change', (e) => {
   updateClass(cls.id, (c) => {
     c.students = names;
     c.apart = c.apart.filter(({ a, b }) => names.includes(a) && names.includes(b));
+    c.seatApart = c.seatApart.filter(({ a, b }) => names.includes(a) && names.includes(b));
+    c.seatRows = c.seatRows.filter(({ name }) => names.includes(name));
   });
   renderClassEditor();
   renderToolScreen();
@@ -2369,16 +2438,19 @@ function buildGroups(students, k, apart) {
   apart.forEach(({ a, b }) => { conflicts.get(a)?.add(b); conflicts.get(b)?.add(a); });
   const base = Math.floor(students.length / k);
   const extra = students.length % k;
-  for (let attempt = 0; attempt < 30; attempt++) {
-    const order = shuffled(students).sort((a, b) => conflicts.get(b).size - conflicts.get(a).size);
-    const caps = shuffled(Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0)));
+  const deadline = performance.now() + SOLVER_BUDGET_MS;
+  let timedOut = false;
+  for (let attempt = 0; attempt < 30 && !timedOut; attempt++) {
+    const order = fastShuffled(students).sort((a, b) => conflicts.get(b).size - conflicts.get(a).size);
+    const caps = fastShuffled(Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0)));
     const groups = Array.from({ length: k }, () => []);
     let steps = 0;
     const place = (i) => {
       if (i === order.length) return true;
-      if (++steps > 20000) return false;
+      if ((++steps & 255) === 0 && performance.now() > deadline) timedOut = true;
+      if (timedOut || steps > 20000) return false;
       const s = order[i];
-      for (const gi of shuffled([...groups.keys()])) {
+      for (const gi of fastShuffled([...groups.keys()])) {
         if (groups[gi].length >= caps[gi] || groups[gi].some((m) => conflicts.get(s).has(m))) continue;
         groups[gi].push(s);
         if (place(i + 1)) return true;
@@ -2458,6 +2530,311 @@ document.querySelector('#groupsScreenLabel').addEventListener('change', (e) => {
   t.groupValue = Math.min(30, Math.max(1, Number(document.querySelector('#groupsValue').value) || 1));
   saveTeacherTools();
 }));
+
+// ---------- Seating plan: random seats on a freely arranged board ----------
+// The board is 100 x BOARD_H units (same scale on both axes). Each desk is a rounded
+// trapezoid centered at (x, y) in those units, optionally rotated. The classroom layout
+// belongs to the tool (tool.desks) — it's the teacher's room — while the class (shared
+// with every teacher) supplies the students plus the seating rules: seatApart (pairs who
+// must not sit next to each other) and seatRows (person -> row, 1 = nearest the board).
+// "Row" and "next to" are derived from where the desks actually are, so any layout works:
+// desks whose y is within ROW_TOLERANCE of a row's first desk belong to that row, and two
+// desks are neighbors when their centers are at most NEIGHBOR_DIST apart (sides, front,
+// back — not diagonals, at the default spacing). The finished plan is saved per class
+// (tool.seatPlans[classId] = { deskId: name }).
+const BOARD_H = 68;
+const DESK_W = 10;
+const DESK_H = 9.2;
+const DESK_MIN_Y = 11;
+const ROW_TOLERANCE = 5;
+const NEIGHBOR_DIST = 17;
+const SEAT_ROW_MAX = 10;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+// A trapezoid with rounded corners: each corner is cut back `radius` along both edges
+// and joined with a quadratic curve through the original corner.
+function roundedPolygonPath(points, radius) {
+  const n = points.length;
+  const toward = (from, to, dist) => {
+    const dx = to[0] - from[0];
+    const dy = to[1] - from[1];
+    const len = Math.hypot(dx, dy);
+    return [from[0] + (dx / len) * dist, from[1] + (dy / len) * dist];
+  };
+  return `${points.map((p, i) => {
+    const before = toward(p, points[(i - 1 + n) % n], radius);
+    const after = toward(p, points[(i + 1) % n], radius);
+    return `${i ? 'L' : 'M'}${before[0].toFixed(2)} ${before[1].toFixed(2)}Q${p[0]} ${p[1]} ${after[0].toFixed(2)} ${after[1].toFixed(2)}`;
+  }).join('')}Z`;
+}
+const DESK_PATH = roundedPolygonPath([[20, 2], [54, 2], [72, 66], [2, 66]], 9);
+function defaultDesks() {
+  const desks = [];
+  for (let r = 0; r < 5; r++) {
+    for (let c = 0; c < 6; c++) desks.push({ id: crypto.randomUUID(), x: 12.5 + c * 15, y: 15 + r * 11.5, angle: 0 });
+  }
+  return desks;
+}
+function deskRows(desks) {
+  const rowOf = {};
+  let row = 0;
+  let anchor = null;
+  [...desks].sort((a, b) => a.y - b.y).forEach((d) => {
+    if (anchor === null || d.y - anchor > ROW_TOLERANCE) { row++; anchor = d.y; }
+    rowOf[d.id] = row;
+  });
+  return { rowOf, rowCount: row };
+}
+const deskDistance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const seatName = (name) => {
+  const i = name.indexOf(' ');
+  return i < 0 ? name : `${name.slice(0, i)}\n${name.slice(i + 1)}`;
+};
+
+// Randomized backtracking, like the group draw: most-constrained people are seated first
+// (row rules shrink a person's choice of desks, "not next to" pairs add conflicts), each
+// goes to a random free desk in an allowed row with none of their partners on a
+// neighboring desk. Returns { deskId: name }, or null if the rules can't all be met.
+function seatStudents(students, desks, seatRows, seatApart) {
+  const { rowOf } = deskRows(desks);
+  const allowed = new Map();
+  seatRows.forEach(({ name, row }) => { allowed.set(name, (allowed.get(name) || new Set()).add(row)); });
+  const partners = new Map(students.map((s) => [s, new Set()]));
+  seatApart.forEach(({ a, b }) => { partners.get(a)?.add(b); partners.get(b)?.add(a); });
+  const near = new Map(desks.map((d) => [d.id, desks.filter((o) => o.id !== d.id && deskDistance(d, o) <= NEIGHBOR_DIST).map((o) => o.id)]));
+  const choices = (s) => (allowed.has(s) ? desks.filter((d) => allowed.get(s).has(rowOf[d.id])).length : desks.length);
+  const deadline = performance.now() + SOLVER_BUDGET_MS;
+  let timedOut = false;
+  for (let attempt = 0; attempt < 40 && !timedOut; attempt++) {
+    const order = fastShuffled(students).sort((a, b) => choices(a) - choices(b) || partners.get(b).size - partners.get(a).size);
+    const seatOf = new Map();
+    let steps = 0;
+    const place = (i) => {
+      if (i === order.length) return true;
+      if ((++steps & 255) === 0 && performance.now() > deadline) timedOut = true;
+      if (timedOut || steps > 20000) return false;
+      const s = order[i];
+      for (const d of fastShuffled(desks)) {
+        if (seatOf.has(d.id)) continue;
+        if (allowed.has(s) && !allowed.get(s).has(rowOf[d.id])) continue;
+        if (near.get(d.id).some((id) => partners.get(s).has(seatOf.get(id)))) continue;
+        seatOf.set(d.id, s);
+        if (place(i + 1)) return true;
+        seatOf.delete(d.id);
+      }
+      return false;
+    };
+    if (place(0)) return Object.fromEntries(seatOf);
+  }
+  return null;
+}
+
+const seatBoardEl = document.querySelector('#seatBoard');
+const seatTool = () => activeClassTool();
+const seatPlanFor = (tool, cls) => (cls && tool.seatPlans?.[cls.id]) || {};
+function renderSeatBoard(animate = false) {
+  const tool = seatTool();
+  if (!tool) return;
+  const cls = toolClass(tool);
+  const plan = seatPlanFor(tool, cls);
+  const { rowOf } = deskRows(tool.desks);
+  const seated = (d) => (plan[d.id] && cls?.students.includes(plan[d.id]) ? plan[d.id] : null);
+  seatBoardEl.innerHTML = '<div class="seat-front">TABLICA</div>' + tool.desks.map((d) => {
+    const name = seated(d);
+    const selected = state.seatEditing && state.selectedDesk === d.id;
+    const label = name ? (animate ? '' : escapeHtml(seatName(name))) : `<span class="seat-row-no">${rowOf[d.id]}</span>`;
+    return `<div class="seat-desk${name ? ' filled' : ''}${selected ? ' selected' : ''}${state.seatEditing ? ' editable' : ''}" data-desk="${d.id}" style="left:${d.x}%;top:${(d.y / BOARD_H) * 100}%;width:${DESK_W}%;height:${(DESK_H / BOARD_H) * 100}%">
+      <svg class="seat-shape" viewBox="0 0 74 68" preserveAspectRatio="none" style="transform:rotate(${d.angle || 0}deg)"><path d="${DESK_PATH}"/></svg>
+      <span class="seat-label"><span class="seat-name">${label}</span></span>
+    </div>`;
+  }).join('');
+}
+function renderSeatingScreen() {
+  const tool = seatTool();
+  if (!tool) { show('teacherTools'); return; }
+  const cls = toolClass(tool);
+  document.querySelector('#seatingScreenLabel').value = tool.label || '';
+  renderClassBars();
+  document.querySelector('#seatEditToggle').textContent = state.seatEditing ? 'Gotowe' : 'Edytuj układ';
+  document.querySelector('#seatEditBar').classList.toggle('hidden', !state.seatEditing);
+  document.querySelector('#seatEditBar').classList.toggle('flex', state.seatEditing);
+  ['#seatRotL', '#seatRotR', '#seatDup', '#seatDel'].forEach((sel) => { document.querySelector(sel).disabled = !state.selectedDesk; });
+  document.querySelector('#seatClear').disabled = !cls || !Object.keys(seatPlanFor(tool, cls)).length;
+  const { rowCount } = deskRows(tool.desks);
+  const info = [`Stolików: ${tool.desks.length}`, `rzędów: ${rowCount}`];
+  if (cls) info.push(`uczniów: ${cls.students.length}`);
+  if (cls?.seatApart.length) info.push(`„nie obok”: ${cls.seatApart.length}`);
+  if (cls?.seatRows.length) info.push(`reguł rzędów: ${cls.seatRows.length}`);
+  document.querySelector('#seatInfo').textContent = cls ? info.join(' · ') : `${info.join(' · ')} — wybierz klasę albo dodaj nową (+).`;
+  renderSeatBoard();
+}
+function openSeatingScreen(id) {
+  state.activeTool = id;
+  state.seatEditing = false;
+  state.selectedDesk = null;
+  const tool = seatTool();
+  if (tool) linkToolToClass(tool);
+  document.querySelector('#seatError').classList.add('hidden');
+  renderSeatingScreen();
+  show('seatingScreen');
+}
+
+// Each seated desk flickers through a few random names, then the real one drops in with
+// the bounce — desks start a little after one another, front rows first.
+function animateSeating(tool, plan) {
+  const { rowOf } = deskRows(tool.desks);
+  const filled = tool.desks.filter((d) => plan[d.id]).sort((a, b) => rowOf[a.id] - rowOf[b.id] || a.x - b.x);
+  const pool = Object.values(plan);
+  const stagger = Math.min(50, Math.floor(1300 / Math.max(1, filled.length - 1)));
+  const flickDelays = [45, 52, 60, 70];
+  filled.forEach((d, i) => {
+    const el = seatBoardEl.querySelector(`[data-desk="${d.id}"] .seat-name`);
+    if (!el) return;
+    let step = 0;
+    const flick = () => {
+      if (step >= flickDelays.length) { dropInText(el, seatName(plan[d.id]), true); return; }
+      dropInText(el, seatName(pool[randomInt(pool.length)]), false);
+      setTimeout(flick, flickDelays[step++]);
+    };
+    setTimeout(flick, i * stagger);
+  });
+  return sleep((filled.length - 1) * stagger + flickDelays.reduce((a, b) => a + b, 0) + 400);
+}
+async function drawSeating() {
+  if (drawInProgress) return;
+  const tool = seatTool();
+  if (!tool) return;
+  const cls = toolClass(tool);
+  const error = document.querySelector('#seatError');
+  const fail = (message) => { error.textContent = message; error.classList.remove('hidden'); };
+  if (!cls) return fail('Wybierz klasę albo dodaj nową (+).');
+  if (!cls.students.length) return fail('Ta klasa nie ma jeszcze uczniów — kliknij ✎ i wpisz listę.');
+  if (tool.desks.length < cls.students.length) return fail(`Za mało stolików: ${cls.students.length} uczniów, ${tool.desks.length} stolików — dodaj stoliki w układzie.`);
+  const { rowCount } = deskRows(tool.desks);
+  const missingRow = cls.seatRows.find(({ row }) => row > rowCount);
+  if (missingRow) return fail(`Reguła „${missingRow.name} → rząd ${missingRow.row}” nie pasuje do układu — liczba rzędów stolików: ${rowCount}.`);
+  const plan = seatStudents(cls.students, tool.desks, cls.seatRows, cls.seatApart);
+  if (!plan) return fail('Nie da się rozsadzić klasy z tymi regułami — usuń część reguł „nie obok” lub rzędów albo zmień układ stolików.');
+  error.classList.add('hidden');
+  (tool.seatPlans || (tool.seatPlans = {}))[cls.id] = plan;
+  saveTeacherTools();
+  if (animationsOn()) {
+    drawInProgress = true;
+    setDrawButton('#seatDraw', true);
+    try {
+      renderSeatBoard(true);
+      await animateSeating(tool, plan);
+    } finally {
+      drawInProgress = false;
+      setDrawButton('#seatDraw', false);
+    }
+  }
+  if (state.activeTool === tool.id) renderSeatingScreen();
+}
+document.querySelector('#seatDraw').addEventListener('click', drawSeating);
+document.querySelector('#seatingScreenLabel').addEventListener('change', (e) => { const t = seatTool(); if (t) renameTool(t, e.target.value); });
+document.querySelector('#seatClear').addEventListener('click', () => {
+  const tool = seatTool();
+  const cls = toolClass(tool);
+  if (!tool || !cls) return;
+  delete tool.seatPlans?.[cls.id];
+  saveTeacherTools();
+  renderSeatingScreen();
+});
+
+// -- Layout editing --
+const selectedDesk = () => seatTool()?.desks.find((d) => d.id === state.selectedDesk);
+function seatLayoutChanged() {
+  saveTeacherTools();
+  renderSeatingScreen();
+}
+document.querySelector('#seatEditToggle').addEventListener('click', () => {
+  state.seatEditing = !state.seatEditing;
+  state.selectedDesk = null;
+  renderSeatingScreen();
+});
+document.querySelector('#seatAddDesk').addEventListener('click', () => {
+  const tool = seatTool();
+  if (!tool) return;
+  const desk = { id: crypto.randomUUID(), x: 50, y: BOARD_H / 2, angle: 0 };
+  tool.desks.push(desk);
+  state.selectedDesk = desk.id;
+  seatLayoutChanged();
+});
+document.querySelector('#seatAddRow').addEventListener('click', () => {
+  const tool = seatTool();
+  if (!tool) return;
+  const lowest = tool.desks.length ? Math.max(...tool.desks.map((d) => d.y)) : null;
+  const y = lowest === null ? 15 : Math.min(lowest + 11.5, BOARD_H - DESK_H / 2);
+  for (let c = 0; c < 6; c++) tool.desks.push({ id: crypto.randomUUID(), x: 12.5 + c * 15, y, angle: 0 });
+  seatLayoutChanged();
+});
+[['#seatRotL', -15], ['#seatRotR', 15]].forEach(([sel, delta]) => document.querySelector(sel).addEventListener('click', () => {
+  const desk = selectedDesk();
+  if (!desk) return;
+  desk.angle = (((desk.angle || 0) + delta) % 360 + 360) % 360;
+  seatLayoutChanged();
+}));
+document.querySelector('#seatDup').addEventListener('click', () => {
+  const tool = seatTool();
+  const desk = selectedDesk();
+  if (!tool || !desk) return;
+  const copy = { id: crypto.randomUUID(), x: clamp(desk.x + 4, DESK_W / 2, 100 - DESK_W / 2), y: clamp(desk.y + 4, DESK_MIN_Y, BOARD_H - DESK_H / 2), angle: desk.angle || 0 };
+  tool.desks.push(copy);
+  state.selectedDesk = copy.id;
+  seatLayoutChanged();
+});
+document.querySelector('#seatDel').addEventListener('click', () => {
+  const tool = seatTool();
+  const desk = selectedDesk();
+  if (!tool || !desk) return;
+  tool.desks = tool.desks.filter((d) => d.id !== desk.id);
+  Object.values(tool.seatPlans || {}).forEach((plan) => { delete plan[desk.id]; });
+  state.selectedDesk = null;
+  seatLayoutChanged();
+});
+document.querySelector('#seatDefault').addEventListener('click', () => {
+  const tool = seatTool();
+  if (!tool || !confirm('Przywrócić domyślny układ stolików? Obecny układ i zapisane plany rozsadzenia zostaną zastąpione.')) return;
+  tool.desks = defaultDesks();
+  tool.seatPlans = {};
+  state.selectedDesk = null;
+  seatLayoutChanged();
+});
+// Dragging uses pointer events on the board itself (desks are re-created on every
+// render), so it works the same for mouse and touch.
+let seatDrag = null;
+seatBoardEl.addEventListener('pointerdown', (e) => {
+  if (!state.seatEditing) return;
+  const el = e.target.closest('[data-desk]');
+  const desk = el && seatTool()?.desks.find((d) => d.id === el.dataset.desk);
+  if (!desk) return;
+  state.selectedDesk = desk.id;
+  seatDrag = { desk, el, startX: e.clientX, startY: e.clientY, originX: desk.x, originY: desk.y, moved: false };
+  try { el.setPointerCapture(e.pointerId); } catch { /* synthetic events can't be captured */ }
+  seatBoardEl.querySelectorAll('.seat-desk.selected').forEach((n) => n.classList.remove('selected'));
+  el.classList.add('selected');
+  e.preventDefault();
+});
+seatBoardEl.addEventListener('pointermove', (e) => {
+  if (!seatDrag) return;
+  const rect = seatBoardEl.getBoundingClientRect();
+  const dx = ((e.clientX - seatDrag.startX) / rect.width) * 100;
+  const dy = ((e.clientY - seatDrag.startY) / rect.height) * BOARD_H;
+  if (Math.abs(dx) + Math.abs(dy) > 0.3) seatDrag.moved = true;
+  seatDrag.desk.x = clamp(seatDrag.originX + dx, DESK_W / 2, 100 - DESK_W / 2);
+  seatDrag.desk.y = clamp(seatDrag.originY + dy, DESK_MIN_Y, BOARD_H - DESK_H / 2);
+  seatDrag.el.style.left = `${seatDrag.desk.x}%`;
+  seatDrag.el.style.top = `${(seatDrag.desk.y / BOARD_H) * 100}%`;
+});
+const endSeatDrag = () => {
+  if (!seatDrag) return;
+  const { moved } = seatDrag;
+  seatDrag = null;
+  if (moved) saveTeacherTools();
+  renderSeatingScreen();
+};
+seatBoardEl.addEventListener('pointerup', endSeatDrag);
+seatBoardEl.addEventListener('pointercancel', endSeatDrag);
 
 // Shows the remaining time for whichever timer is currently running, right under the
 // logo, so it stays visible no matter which screen the teacher is on — not just while

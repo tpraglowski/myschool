@@ -262,6 +262,49 @@
       </div>
     </section>
 
+    <section class="view hidden" id="seatingScreen">
+      <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="teacherTools">← Wróć</button>
+      <div class="h-[18px]"></div>
+      <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
+        <div class="mb-4 grid gap-4 lg:grid-cols-2">
+          <div>
+            <input class="mb-3 block w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-[1.2em] font-bold tracking-tight outline-primary focus:border-line focus:bg-app" id="seatingScreenLabel" maxlength="40" placeholder="Rozsadzanie osób" />
+            <div data-class-bar>
+              <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Klasa</h3>
+              <div class="flex items-center gap-2">
+                <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
+                <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
+                <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę">✎</button>
+              </div>
+              <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
+            </div>
+          </div>
+          <div class="flex flex-wrap content-start items-center gap-2 lg:justify-end">
+            <button class="rounded-xl bg-primary px-5 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="seatDraw">Losuj miejsca</button>
+            <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-muted" id="seatClear">Wyczyść plan</button>
+            <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-primary" id="seatEditToggle">Edytuj układ</button>
+          </div>
+        </div>
+        <p class="mb-3 text-sm text-muted" id="seatInfo"></p>
+        <p class="mb-3 hidden rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" id="seatError"></p>
+        <div class="mb-3 hidden flex-wrap items-center gap-2 rounded-xl border border-dashed border-line p-2.5" id="seatEditBar">
+          <button class="rounded-lg bg-primary px-3 py-1.5 text-sm font-extrabold text-white" id="seatAddDesk">+ Stolik</button>
+          <button class="rounded-lg bg-primary px-3 py-1.5 text-sm font-extrabold text-white" id="seatAddRow">+ Rząd (6)</button>
+          <span class="mx-1 h-5 w-px bg-line"></span>
+          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatRotL" title="Obróć w lewo" aria-label="Obróć w lewo">↺</button>
+          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatRotR" title="Obróć w prawo" aria-label="Obróć w prawo">↻</button>
+          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatDup">Powiel</button>
+          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-red-600 disabled:opacity-40" id="seatDel">Usuń</button>
+          <span class="mx-1 h-5 w-px bg-line"></span>
+          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-muted" id="seatDefault">Układ domyślny</button>
+          <span class="w-full text-xs text-muted">Przeciągnij stolik, żeby go przesunąć; kliknij, żeby go zaznaczyć (obracanie, powielanie, usuwanie).</span>
+        </div>
+        <div class="overflow-x-auto">
+          <div class="relative w-full min-w-[720px] select-none rounded-2xl border border-line bg-app" id="seatBoard" style="aspect-ratio:100/68"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="view hidden" id="detail">
       <div class="mb-3.5 flex items-center gap-2 text-sm text-muted">
         <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="competences">← Przedmioty</button>
@@ -602,6 +645,24 @@
         <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" id="classApartAdd" aria-label="Dodaj regułę">+</button>
       </div>
       <div class="mt-2 flex flex-wrap gap-2" id="classApartList"></div>
+      <h3 class="mt-4 text-[.93em] font-bold">Kryteria rozsadzenia</h3>
+      <p class="mb-1.5 text-xs text-muted">Osoby, które nie powinny siedzieć obok siebie (po bokach, z przodu ani z tyłu) w narzędziu „Rozsadzanie osób”.</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-2 py-2 text-ink" id="classSeatApartA" aria-label="Pierwsza osoba"></select>
+        <span class="text-sm text-muted">nie obok</span>
+        <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-2 py-2 text-ink" id="classSeatApartB" aria-label="Druga osoba"></select>
+        <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" id="classSeatApartAdd" aria-label="Dodaj regułę">+</button>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-2" id="classSeatApartList"></div>
+      <h3 class="mt-4 text-[.93em] font-bold">Rzędy</h3>
+      <p class="mb-1.5 text-xs text-muted">Osoba, która ma siedzieć w wybranym rzędzie (rząd 1 = najbliżej tablicy).</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-2 py-2 text-ink" id="classSeatRowName" aria-label="Osoba"></select>
+        <span class="text-sm text-muted">→ rząd</span>
+        <select class="w-20 rounded-lg border border-line bg-app px-2 py-2 text-ink" id="classSeatRowNo" aria-label="Numer rzędu"></select>
+        <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" id="classSeatRowAdd" aria-label="Dodaj regułę rzędu">+</button>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-2" id="classSeatRowList"></div>
       <div class="mt-5 flex justify-end">
         <button type="button" class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="classEditorDone">Zamknij</button>
       </div>
