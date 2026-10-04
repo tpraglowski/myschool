@@ -218,8 +218,8 @@
             <div class="flex items-center gap-2">
               <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
               <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
-              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę">✎</button>
-              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę">📌</button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę"><i data-icon="pencil"></i></button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę"><i data-icon="pin"></i></button>
             </div>
             <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
           </div>
@@ -243,8 +243,8 @@
             <div class="flex items-center gap-2">
               <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
               <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
-              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę">✎</button>
-              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę">📌</button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę"><i data-icon="pencil"></i></button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę"><i data-icon="pin"></i></button>
             </div>
             <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
           </div>
@@ -277,8 +277,8 @@
               <div class="flex items-center gap-2">
                 <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
                 <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
-                <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę">✎</button>
-                <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę">📌</button>
+                <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę"><i data-icon="pencil"></i></button>
+                <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę"><i data-icon="pin"></i></button>
               </div>
               <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
             </div>
@@ -307,8 +307,8 @@
           <button class="rounded-lg bg-primary px-3 py-1.5 text-sm font-extrabold text-white" id="seatAddDesk">+ Stolik</button>
           <button class="rounded-lg bg-primary px-3 py-1.5 text-sm font-extrabold text-white" id="seatAddRow">+ Rząd (6)</button>
           <span class="mx-1 h-5 w-px bg-line"></span>
-          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatRotL" title="Obróć w lewo" aria-label="Obróć w lewo">↺</button>
-          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatRotR" title="Obróć w prawo" aria-label="Obróć w prawo">↻</button>
+          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatRotL" title="Obróć w lewo" aria-label="Obróć w lewo"><i data-icon="undo"></i></button>
+          <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatRotR" title="Obróć w prawo" aria-label="Obróć w prawo"><i data-icon="redo"></i></button>
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatDup">Powiel</button>
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-red-600 disabled:opacity-40" id="seatDel">Usuń</button>
           <label class="hidden items-center gap-1.5 text-sm font-bold text-ink" id="seatNumWrap">Numer rzędu
@@ -350,8 +350,8 @@
           <div><h2 class="text-[1.2em] font-bold tracking-tight">Tryb wyglądu</h2><p class="mt-1 text-sm text-muted">Wybierz tryb jasny lub ciemny.</p></div>
           <div class="flex gap-2">
             <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="auto">◐ Auto</button>
-            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="light">☀ Jasny</button>
-            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="dark">☾ Ciemny</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="light"><i data-icon="sun"></i> Jasny</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-mode="dark"><i data-icon="moon"></i> Ciemny</button>
           </div>
         </div>
         <div class="grid grid-rows-[1fr] overflow-hidden transition-[grid-template-rows] duration-300 ease-out" id="colourSettingWrap">
@@ -389,10 +389,10 @@
           <div class="flex flex-wrap gap-2 sm:max-w-[330px] sm:justify-end">
             <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="off">Wyłączony</button>
             <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="auto">Auto</button>
-            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="autumn">🍂 Jesień</button>
-            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="winter">❄ Zima</button>
-            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="spring">🌸 Wiosna</button>
-            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="summer">☀ Lato</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="autumn"><i data-icon="leaf"></i> Jesień</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="winter"><i data-icon="snow"></i> Zima</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="spring"><i data-icon="flower"></i> Wiosna</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="summer"><i data-icon="sun"></i> Lato</button>
           </div>
         </div>
         <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
@@ -640,8 +640,8 @@
           <option value="locked">Nieodblokowane</option>
           <option value="unlocked">Odblokowane — zdobądź mnie!</option>
           <option value="known">Umiem</option>
-          <option value="earned_basic">Zdobyta — poziom podstawowy 👍</option>
-          <option value="earned_advanced">Zdobyta — poziom zaawansowany 🏆</option>
+          <option value="earned_basic">Zdobyta — poziom podstawowy</option>
+          <option value="earned_advanced">Zdobyta — poziom zaawansowany</option>
         </select>
       </div>
       <div class="mt-[21px] flex justify-end gap-[9px]">
@@ -655,13 +655,13 @@
     <div class="p-6">
       <div class="mb-4 flex items-center justify-between gap-3">
         <h2 class="text-[1.35em] font-bold">Edytuj klasę</h2>
-        <button type="button" class="rounded-lg bg-app px-2.5 py-1.5 font-bold text-muted" id="classEditorClose" aria-label="Zamknij">✕</button>
+        <button type="button" class="rounded-lg bg-app px-2.5 py-1.5 font-bold text-muted" id="classEditorClose" aria-label="Zamknij"><i data-icon="x"></i></button>
       </div>
       <p class="mb-3 rounded-xl bg-app px-3 py-2 text-xs text-muted">Klasa jest wspólna — widzą ją i mogą ją edytować wszyscy nauczyciele. Historia losowań osoby jest prywatna.</p>
       <label class="text-[.93em] font-bold" for="classNameInput">Nazwa klasy</label>
       <div class="mb-4 mt-1.5 flex gap-2">
         <input class="min-w-0 flex-1 rounded-[11px] border border-[#dce1ee] bg-app px-3 py-[11px] text-ink outline-primary" id="classNameInput" maxlength="30" />
-        <button type="button" class="rounded-lg bg-app px-3 py-2 font-bold text-red-600" id="classDeleteBtn" title="Usuń klasę" aria-label="Usuń klasę">🗑</button>
+        <button type="button" class="rounded-lg bg-app px-3 py-2 font-bold text-red-600" id="classDeleteBtn" title="Usuń klasę" aria-label="Usuń klasę"><i data-icon="trash"></i></button>
       </div>
       <h3 class="text-[.93em] font-bold">Uczniowie</h3>
       <p class="mb-1.5 text-xs text-muted">Jedno imię i nazwisko w każdej linii. Wielkie litery na początku słów dodają się same.</p>
@@ -704,7 +704,7 @@
     <div class="mx-auto flex h-full w-[calc(100%-2rem)] max-w-[1120px] flex-col py-7">
       <div class="mb-5 flex items-center justify-between gap-3">
         <h2 class="text-[clamp(1.5em,4vw,2.2em)] font-extrabold tracking-tight">Dodaj narzędzie</h2>
-        <button class="rounded-[10px] bg-card px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelToolPicker">✕ Zamknij</button>
+        <button class="rounded-[10px] bg-card px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelToolPicker"><i data-icon="x"></i> Zamknij</button>
       </div>
       <input class="mb-5 w-full rounded-xl border border-line bg-card px-4 py-3 text-ink outline-primary" id="toolSearch" type="search" placeholder="Szukaj funkcji…" autocomplete="off" />
       <div class="grid flex-1 content-start gap-3 overflow-y-auto sm:grid-cols-[repeat(auto-fill,minmax(260px,1fr))]" id="toolPickerList"></div>
@@ -751,7 +751,7 @@
       <label class="mt-4 flex cursor-pointer select-none items-center gap-3 text-sm font-bold">
         <input class="peer sr-only" type="checkbox" id="toolSettingsPin" />
         <span class="relative h-5 w-9 shrink-0 rounded-full bg-line transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-4 peer-disabled:opacity-40"></span>
-        📌 Przypięte
+        <i data-icon="pin"></i> Przypięte
       </label>
       <p class="mt-1 text-xs text-muted" id="toolSettingsPinNote"></p>
       <div class="mt-6 flex items-center justify-between gap-3">
@@ -838,6 +838,6 @@
   </div>
 
   <canvas class="pointer-events-none fixed inset-0 z-[5] hidden h-full w-full" id="seasonCanvas" aria-hidden="true"></canvas>
-  <script type="module" src="script.js?v=20261004k"></script>
+  <script type="module" src="script.js?v=20261004l"></script>
 </body>
 </html>

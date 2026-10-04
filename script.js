@@ -4,6 +4,41 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/fireba
 import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection, onSnapshot, runTransaction } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
+// ---------- Icons ----------
+// Every icon in the app is a monochrome line SVG that takes the surrounding text colour
+// (currentColor) — no colour emoji. icon('name') returns the markup for template strings;
+// static HTML uses <i data-icon="name"></i>, filled in by hydrateIcons() on load.
+const ICONS = {
+  pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/>',
+  gear: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  pencil: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>',
+  timer: '<path d="M10 2h4"/><path d="M12 14l3-3"/><circle cx="12" cy="14" r="8"/>',
+  dice: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M16 8h.01"/><path d="M12 12h.01"/><path d="M8 16h.01"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  seat: '<path d="M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3"/><path d="M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z"/><path d="M5 18v2"/><path d="M19 18v2"/>',
+  leaf: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>',
+  snow: '<path d="M2 12h20"/><path d="M12 2v20"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/>',
+  flower: '<circle cx="12" cy="12" r="3"/><path d="M12 16.5A4.5 4.5 0 1 1 7.5 12 4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 1 1 4.5 4.5 4.5 4.5 0 1 1-4.5 4.5"/><path d="M12 7.5V9"/><path d="M7.5 12H9"/><path d="M16.5 12H15"/><path d="M12 16.5V15"/><path d="m8 8 1.88 1.88"/><path d="M14.12 9.88 16 8"/><path d="m8 16 1.88-1.88"/><path d="M14.12 14.12 16 16"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  thumbs: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
+  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  palette: '<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
+  lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  note: '<path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/>',
+  cap: '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  undo: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  redo: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+};
+const icon = (name) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+function hydrateIcons(root = document) {
+  root.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = icon(el.dataset.icon); });
+}
+hydrateIcons();
+
 // ---------- Cloud data store (Firestore) ----------
 // Shared data lives in Firestore so every browser/device sees the same thing.
 // Lessons/subjects/announcements are each one document in the "store" collection
@@ -406,10 +441,10 @@ document.querySelector('[data-open="events"]').addEventListener('click', () => {
 // ---------- Subject / competence cards ----------
 const statusInfo = {
   locked: { label: 'Nieodblokowane', color: 'linear-gradient(135deg,#facc15,#f59e0b)' },
-  unlocked: { label: '⚠ Zdobądź mnie!', color: 'linear-gradient(135deg,#f97316,#ef4444)' },
+  unlocked: { label: `${icon('alert')} Zdobądź mnie!`, color: 'linear-gradient(135deg,#f97316,#ef4444)' },
   known: { label: 'Umiem', color: 'linear-gradient(135deg,#2563eb,#06b6d4)' },
-  earned_basic: { label: 'Zdobyta — poziom podstawowy 👍', color: 'linear-gradient(135deg,#16a34a,#22c55e)' },
-  earned_advanced: { label: 'Zdobyta — poziom zaawansowany 🏆', color: 'linear-gradient(135deg,#065f46,#10b981)' },
+  earned_basic: { label: `Zdobyta — poziom podstawowy ${icon('thumbs')}`, color: 'linear-gradient(135deg,#16a34a,#22c55e)' },
+  earned_advanced: { label: `Zdobyta — poziom zaawansowany ${icon('trophy')}`, color: 'linear-gradient(135deg,#065f46,#10b981)' },
 };
 const earnedStatuses = ['earned_basic', 'earned_advanced'];
 
@@ -428,7 +463,7 @@ function card(item, type) {
   return `<article class="group relative min-h-[172px] cursor-pointer overflow-hidden rounded-[25px] p-5 text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" style="background:${background}" data-id="${item.id}" data-type="${type}" tabindex="0" role="button">
     <span aria-hidden="true" class="pointer-events-none absolute -right-[75px] -top-[78px] h-[220px] w-[220px] rounded-full bg-white/20"></span>
     ${canDelete ? `<button class="absolute right-3 top-3 z-10 rounded-lg bg-black/30 px-2 py-1 text-sm font-bold opacity-0 transition group-hover:opacity-100" title="Usuń" data-delete="${item.id}" data-type="${type}">Usuń</button>` : ''}
-    ${canChangeColor ? `<button class="absolute right-3 top-3 z-10 rounded-lg bg-black/30 px-2 py-1 text-sm font-bold opacity-0 transition group-hover:opacity-100" title="Zmień kolor" data-change-color="${item.id}">🎨</button>` : ''}
+    ${canChangeColor ? `<button class="absolute right-3 top-3 z-10 rounded-lg bg-black/30 px-2 py-1 text-sm font-bold opacity-0 transition group-hover:opacity-100" title="Zmień kolor" data-change-color="${item.id}" aria-label="Zmień kolor">${icon('palette')}</button>` : ''}
     <h2 class="relative mt-14 text-[1.3em] font-bold tracking-tight">${escapeHtml(item.name)}</h2>
     <p class="relative mt-1 text-[.9em] text-white/85">${body}</p>
   </article>`;
@@ -931,8 +966,8 @@ function renderSchedule() {
     return `<div class="relative grid grid-cols-[65px_1fr_auto] items-center overflow-hidden rounded-2xl border border-line${isNow ? ' outline outline-[3px] outline-offset-2 outline-amber-400' : ''}">
       ${isNow ? `<span class="absolute inset-x-0 top-0 z-10 border-t-[3px] border-amber-400 bg-amber-100 py-[3px] pr-2 text-right text-[9px] font-black tracking-widest text-amber-800">TERAZ</span>` : ''}
       <div class="grid h-full place-items-center py-4 text-center text-[.9em] font-extrabold text-white" style="background:${x.color}">${x.start}<br><small>${x.end}</small></div>
-      <div class="px-4 py-3"><b class="block">${escapeHtml(x.name)}</b><span class="text-[.9em] text-muted">sala ${escapeHtml(x.room || '—')} · ${escapeHtml(x.teacher)}</span>${replacement ? `<span class="mt-1 inline-block rounded-lg bg-amber-100 px-2 py-1 text-[.78em] font-extrabold text-amber-800">Zastępstwo za: ${escapeHtml(replacementName)}</span>` : ''}${x.personal ? `<span class="mt-1 inline-block rounded-lg bg-indigo-100 px-2 py-1 text-[.78em] font-extrabold text-indigo-800">🔒 Tylko dla Ciebie</span>` : ''}</div>
-      ${editable ? `<div class="mr-3 flex gap-1"><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-primary" data-edit-lesson="${x.id}" data-personal="${x.personal ? '1' : ''}" aria-label="Edytuj lekcję">✎</button><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-red-600" data-delete-own-lesson="${x.id}" data-personal="${x.personal ? '1' : ''}" aria-label="Usuń lekcję">🗑</button></div>` : ''}
+      <div class="px-4 py-3"><b class="block">${escapeHtml(x.name)}</b><span class="text-[.9em] text-muted">sala ${escapeHtml(x.room || '—')} · ${escapeHtml(x.teacher)}</span>${replacement ? `<span class="mt-1 inline-block rounded-lg bg-amber-100 px-2 py-1 text-[.78em] font-extrabold text-amber-800">Zastępstwo za: ${escapeHtml(replacementName)}</span>` : ''}${x.personal ? `<span class="mt-1 inline-block rounded-lg bg-indigo-100 px-2 py-1 text-[.78em] font-extrabold text-indigo-800">${icon('lock')} Tylko dla Ciebie</span>` : ''}</div>
+      ${editable ? `<div class="mr-3 flex gap-1"><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-primary" data-edit-lesson="${x.id}" data-personal="${x.personal ? '1' : ''}" aria-label="Edytuj lekcję">${icon('pencil')}</button><button class="rounded-lg bg-app px-2 py-2 font-extrabold text-red-600" data-delete-own-lesson="${x.id}" data-personal="${x.personal ? '1' : ''}" aria-label="Usuń lekcję">${icon('trash')}</button></div>` : ''}
     </div>`;
   }).join('') : emptyState('Brak lekcji', `Dodaj pierwszą lekcję na ${weekdayLabel(state.scheduleDay).toLowerCase()}.`);
   el.querySelectorAll('[data-edit-lesson]').forEach((b) => b.addEventListener('click', () => openLessonEditor(b.dataset.editLesson, viewingClass(), state.scheduleDay, b.dataset.personal === '1')));
@@ -1099,8 +1134,8 @@ function renderAnnouncements() {
     const meta = [x.date, x.time].filter(Boolean).join(' · ');
     return `<article class="relative min-h-[145px] rounded-[25px] p-5 ${eventStyles[x.type] || eventStyles.other}">
       ${admin ? `<div class="absolute right-3 top-3 flex gap-1.5">
-        <button class="rounded-lg bg-white/70 px-2 py-1 text-sm font-bold" title="Edytuj" data-edit-announcement="${x.id}">✎</button>
-        <button class="rounded-lg bg-white/70 px-2 py-1 text-sm font-bold" title="Usuń" data-delete-announcement="${x.id}">🗑</button>
+        <button class="rounded-lg bg-white/70 px-2 py-1 text-sm font-bold" title="Edytuj" data-edit-announcement="${x.id}">${icon('pencil')}</button>
+        <button class="rounded-lg bg-white/70 px-2 py-1 text-sm font-bold" title="Usuń" data-delete-announcement="${x.id}">${icon('trash')}</button>
       </div>` : ''}
       <h2 class="mt-9 text-[1.2em] font-bold">${escapeHtml(x.title)}</h2><p class="mt-1 text-[.9em]">${escapeHtml(x.text)}</p>
       ${meta ? `<p class="mt-2 text-xs font-bold opacity-80">${escapeHtml(meta)}</p>` : ''}
@@ -1119,8 +1154,8 @@ function renderAnnouncements() {
           <span class="text-[.9em] text-amber-800">${escapeHtml(x.text)}</span>
         </div>
         ${admin ? `<div class="flex shrink-0 gap-1.5">
-          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-amber-800" data-edit-announcement="${x.id}" aria-label="Edytuj zastępstwo">✎</button>
-          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-red-700" data-delete-replacement="${x.id}" aria-label="Usuń zastępstwo">🗑</button>
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-amber-800" data-edit-announcement="${x.id}" aria-label="Edytuj zastępstwo">${icon('pencil')}</button>
+          <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-red-700" data-delete-replacement="${x.id}" aria-label="Usuń zastępstwo">${icon('trash')}</button>
         </div>` : ''}
       </div>
     </div>`
@@ -1741,7 +1776,7 @@ function renderAccounts() {
         <div>
           <b class="block">${escapeHtml(a.name)}${a.role === 'student' ? ` · klasa ${a.classroom}` : ''}</b>
           <span class="text-[.9em] text-amber-800">${roleLabel(a)}</span>
-          ${a.adminNote ? `<span class="mt-1 block max-w-[320px] text-[.85em] italic text-amber-700">📝 ${escapeHtml(a.adminNote)}</span>` : ''}
+          ${a.adminNote ? `<span class="mt-1 block max-w-[320px] text-[.85em] italic text-amber-700">${icon('note')} ${escapeHtml(a.adminNote)}</span>` : ''}
         </div>
         <div class="flex shrink-0 gap-1.5">
           <button class="rounded-lg bg-white/70 px-2 py-1.5 font-bold text-amber-800" data-edit-account="${escapeHtml(a.name)}">Edytuj</button>
@@ -1955,10 +1990,10 @@ function formatTimer(totalSeconds) {
 // Every tool type the "+" picker offers. Add an entry here (plus rendering for it)
 // to make a new kind of tool available.
 const toolTypes = [
-  { type: 'timer', icon: '⏱', name: 'Timer', description: 'Odliczanie czasu na pełnym ekranie' },
-  { type: 'picker', icon: '🎲', name: 'Losowanie osoby', description: 'Losuje ucznia z klasy; wylosowany nie wypadnie przez następne 5 losowań' },
-  { type: 'groups', icon: '👥', name: 'Losowanie grup', description: 'Dzieli klasę na grupy, z możliwością rozdzielenia wybranych osób' },
-  { type: 'seating', icon: '🪑', name: 'Rozsadzanie osób', description: 'Losowo sadza klasę przy stolikach (miejsca, ławki): własny układ stolików, wybrany rząd dla osoby i „nie obok”' },
+  { type: 'timer', icon: 'timer', name: 'Timer', description: 'Odliczanie czasu na pełnym ekranie' },
+  { type: 'picker', icon: 'dice', name: 'Losowanie osoby', description: 'Losuje ucznia z klasy; wylosowany nie wypadnie przez następne 5 losowań' },
+  { type: 'groups', icon: 'users', name: 'Losowanie grup', description: 'Dzieli klasę na grupy, z możliwością rozdzielenia wybranych osób' },
+  { type: 'seating', icon: 'seat', name: 'Rozsadzanie osób', description: 'Losowo sadza klasę przy stolikach (miejsca, ławki): własny układ stolików, wybrany rząd dla osoby i „nie obok”' },
 ];
 const toolTypeInfo = (type) => toolTypes.find((t) => t.type === type) || toolTypes[0];
 const toolPickerDialog = document.querySelector('#toolPicker');
@@ -1968,7 +2003,7 @@ function renderToolPickerList() {
   const list = document.querySelector('#toolPickerList');
   list.innerHTML = matches.length ? matches.map((t) =>
     `<button type="button" class="flex items-center gap-3 rounded-2xl border border-line bg-card p-4 text-left shadow-[0_4px_15px_var(--shadow)] transition hover:border-primary" data-pick-tool="${t.type}">
-      <span class="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-app text-2xl">${t.icon}</span>
+      <span class="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-app text-2xl">${icon(t.icon)}</span>
       <span><b class="block">${t.name}</b><span class="text-[.85em] text-muted">${t.description}</span></span>
     </button>`
   ).join('') : emptyState('Brak wyników', 'Żadna funkcja nie pasuje do wyszukiwania.');
@@ -2008,11 +2043,11 @@ function toolTileHtml(tool, editing) {
   const info = toolTypeInfo(tool.type);
   return `<button type="button" class="relative min-h-[140px] rounded-[20px] border bg-card p-5 text-left shadow-[0_7px_22px_var(--shadow)] transition hover:-translate-y-1 hover:shadow-lg ${tool.pinned ? 'border-primary' : 'border-line'}" data-open-tool="${tool.id}">
     <span class="absolute right-3 top-3 z-10 flex gap-1.5">
-      ${tileButton(`data-pin-tool="${tool.id}"`, tool.pinned ? 'Odepnij' : 'Przypnij', '📌', tool.pinned ? 'bg-primary text-white' : 'opacity-60')}
-      ${tool.type === 'seating' ? tileButton(`data-settings-tool="${tool.id}"`, 'Ustawienia rozsadzania', '⚙') : ''}
-      ${editing ? tileButton(`data-delete-tool="${tool.id}"`, 'Usuń narzędzie', '🗑', 'text-red-600') : ''}
+      ${tileButton(`data-pin-tool="${tool.id}"`, tool.pinned ? 'Odepnij' : 'Przypnij', icon('pin'), tool.pinned ? 'bg-primary text-white' : 'opacity-60')}
+      ${tool.type === 'seating' ? tileButton(`data-settings-tool="${tool.id}"`, 'Ustawienia rozsadzania', icon('gear')) : ''}
+      ${editing ? tileButton(`data-delete-tool="${tool.id}"`, 'Usuń narzędzie', icon('trash'), 'text-red-600') : ''}
     </span>
-    <span class="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-app text-xl">${info.icon}</span>
+    <span class="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-app text-xl">${icon(info.icon)}</span>
     <b class="block truncate">${escapeHtml(tool.label || info.name)}</b>
     <span class="text-[.85em] text-muted">${info.name}</span>
   </button>`;
@@ -2072,7 +2107,7 @@ function renderToolSections(tools, editing) {
   const pinned = tools.filter((t) => t.pinned);
   if (!pinned.length) return tools.map((t) => toolTileHtml(t, editing)).join('');
   const rest = tools.filter((t) => !t.pinned);
-  return toolSectionTitle(`📌 Przypięte (${pinned.length}/${MAX_PINNED_TOOLS})`)
+  return toolSectionTitle(`${icon('pin')} Przypięte (${pinned.length}/${MAX_PINNED_TOOLS})`)
     + pinned.map((t) => toolTileHtml(t, editing)).join('')
     + (rest.length || editing ? toolSectionTitle('Pozostałe narzędzia') : '')
     + rest.map((t) => toolTileHtml(t, editing)).join('');
@@ -2087,7 +2122,7 @@ function renderToolSettings() {
   const tool = settingsTool();
   if (!tool) { toolSettingsDialog.close(); return; }
   const info = toolTypeInfo(tool.type);
-  document.querySelector('#toolSettingsType').textContent = `${info.icon} ${info.name}`;
+  document.querySelector('#toolSettingsType').innerHTML = `${icon(info.icon)} ${escapeHtml(info.name)}`;
   document.querySelector('#toolSettingsName').placeholder = info.name;
   if (document.activeElement !== document.querySelector('#toolSettingsName')) document.querySelector('#toolSettingsName').value = tool.label || '';
   document.querySelector('#toolSettingsManual').checked = !!tool.manualRows;
@@ -2392,7 +2427,7 @@ function renderClassBars() {
   document.querySelectorAll('[data-class-bar]').forEach((bar) => {
     bar.querySelector('[data-class-select]').innerHTML =
       `<option value="">${classes.length ? 'Wybierz klasę…' : 'Brak klas — dodaj pierwszą (+)'}</option>` +
-      classes.map((c) => `<option value="${c.id}">${isClassPinned(c.id) ? '📌 ' : ''}${escapeHtml(c.name)}</option>`).join('');
+      classes.map((c) => `<option value="${c.id}">${isClassPinned(c.id) ? '★ ' : ''}${escapeHtml(c.name)}</option>`).join('');
     bar.querySelector('[data-class-select]').value = cls ? cls.id : '';
     bar.querySelector('[data-class-edit]').disabled = !cls;
     const pin = bar.querySelector('[data-class-pin]');
@@ -3334,7 +3369,7 @@ function updateHeaderTimerIndicator() {
     return;
   }
   const tool = teacherToolsFor().find((t) => t.id === runningId);
-  indicator.textContent = `⏱ ${tool?.label || 'Timer'}: ${formatTimer(state.timerRuntime[runningId].remaining)}`;
+  indicator.innerHTML = `${icon('timer')} ${escapeHtml(tool?.label || 'Timer')}: ${formatTimer(state.timerRuntime[runningId].remaining)}`;
   indicator.classList.remove('hidden');
 }
 setInterval(() => {
@@ -3365,7 +3400,7 @@ function setupUserInterface() {
   graduatedNotice.classList.toggle('hidden', !showGraduated);
   if (showGraduated) {
     const deleteDate = new Date(new Date(currentUser.graduatedAt).getFullYear(), 9, 1);
-    graduatedNotice.innerHTML = `<b class="block">Ukończyłeś/aś 8 klasę 🎓</b>Twoje konto zostanie usunięte ${deleteDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`;
+    graduatedNotice.innerHTML = `<b class="block">Ukończyłeś/aś 8 klasę ${icon('cap')}</b>Twoje konto zostanie usunięte ${deleteDate.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}.`;
   }
   if (isAdmin()) {
     document.querySelector('#homeGrid').insertAdjacentHTML('beforeend', `<button class="group relative min-h-[220px] overflow-hidden rounded-[25px] p-7 text-left text-white shadow-lg transition hover:-translate-y-1 hover:shadow-2xl" id="homeAdmin" style="background:linear-gradient(135deg,#0f172a,#475569)" onclick="show('admin')">
