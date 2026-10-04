@@ -2815,9 +2815,23 @@ function removeDesk(id) {
   seatLayoutChanged();
 }
 document.querySelector('#seatDel').addEventListener('click', () => { if (state.selectedDesk) removeDesk(state.selectedDesk); });
+// Two-step confirmation on the button itself (a native confirm() dialog can be blocked by
+// the browser): the first click arms it for 4 s, the second one deletes.
+let seatDelAllTimer = null;
+const disarmSeatDelAll = () => {
+  clearTimeout(seatDelAllTimer);
+  seatDelAllTimer = null;
+  document.querySelector('#seatDelAll').textContent = 'Usuń wszystkie';
+};
 document.querySelector('#seatDelAll').addEventListener('click', () => {
   const tool = seatTool();
-  if (!tool || !tool.desks.length || !confirm('Usunąć wszystkie stoliki? Zapisane plany rozsadzenia też zostaną usunięte (zapisane schematy zostają).')) return;
+  if (!tool || !tool.desks.length) return;
+  if (!seatDelAllTimer) {
+    document.querySelector('#seatDelAll').textContent = 'Na pewno?';
+    seatDelAllTimer = setTimeout(disarmSeatDelAll, 4000);
+    return;
+  }
+  disarmSeatDelAll();
   tool.desks = [];
   tool.seatPlans = {};
   state.selectedDesk = null;
