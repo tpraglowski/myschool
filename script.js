@@ -103,9 +103,9 @@ const normalizeSubjectsByClass = (byClass) => {
 const legacyStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
 const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
 const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
-const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], adminNote: '', teacherTools: [], lastTimerSeconds: 300, teacherClasses: [], ...a }));
+const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], adminNote: '', teacherTools: [], lastTimerSeconds: 300, teacherClasses: [], pickHistory: {}, ...a }));
 
-const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'notifications'];
+const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'notifications', 'teacherClasses'];
 const seedValue = {
   subjectsByClass: normalizeSubjectsByClass(legacySubjectsByClass || { '1A': legacySubjects || defaultSubjects }),
   starterSubjectsByGrade: legacyStarterByGrade || Object.fromEntries(
@@ -114,6 +114,7 @@ const seedValue = {
   lessonsByClass: normalizeLessonsByClass(legacyLessonsByClass || { '1A': legacyLessons || defaultLessons }),
   announcements: normalizeAnnouncements(legacyAnnouncements || defaultAnnouncements),
   notifications: [],
+  teacherClasses: [],
 };
 
 const state = {
@@ -122,6 +123,7 @@ const state = {
   lessonsByClass: {},
   announcements: [],
   notifications: [],
+  teacherClasses: [],
   activeSubject: null,
   activeTemplateSubject: null,
   mode: 'subject',
@@ -179,6 +181,7 @@ function applyStoreValue(key, value) {
   else if (key === 'lessonsByClass') state.lessonsByClass = normalizeLessonsByClass(value);
   else if (key === 'announcements') state.announcements = normalizeAnnouncements(value);
   else if (key === 'notifications') state.notifications = value || [];
+  else if (key === 'teacherClasses') state.teacherClasses = value || [];
 }
 
 function renderAfterStoreChange(key) {
@@ -198,6 +201,12 @@ function renderAfterStoreChange(key) {
     renderDashboard();
   } else if (key === 'notifications') {
     renderNotifications();
+  } else if (key === 'teacherClasses') {
+    // Another teacher added/edited/deleted a class. Refresh the class pickers, but leave
+    // an open class editor alone so nobody's in-progress typing gets overwritten (it only
+    // closes if its class was just deleted).
+    if (editingClassId && !editingClass()) classEditorDialog.close();
+    if (isTeacher() && state.activeTool) renderToolScreen();
   }
 }
 
@@ -327,6 +336,7 @@ function watchStoreLive() {
   });
   STORE_KEYS.forEach((key) => onSnapshot(storeDoc(key), (snap) => {
     if (!snap.exists()) return;
+    if (key === 'teacherClasses' && classWritesPending > 0) return;
     applyStoreValue(key, snap.data().value);
     renderAfterStoreChange(key);
   }));
@@ -1985,10 +1995,87 @@ function shuffled(list) {
   return a;
 }
 const studentsLabel = (n) => `${n} ${n === 1 ? 'uczeń' : 'uczniów'}`;
-const teacherClasses = () => {
-  const account = currentAccount();
-  return account ? (account.teacherClasses || (account.teacherClasses = [])) : [];
+// Classes are shared by every teacher: they live in the store/teacherClasses document
+// (live-synced like lessons and announcements), not on any one teacher's account. Each
+// write is a transaction that replaces/adds/removes just the one class by id, so two
+// teachers working on different classes at once don't overwrite each other. What stays
+// private per teacher is the random-person draw history (account.pickHistory), since
+// one teacher's draws shouldn't lock students out of another teacher's draws.
+const teacherClasses = () => state.teacherClasses;
+const publicClass = ({ id, name, students, apart, createdBy }) => ({ id, name, students, apart: apart || [], createdBy: createdBy || '' });
+// Writes are queued so they reach the server in order, and while any is in flight the
+// incoming live snapshots of this document are ignored (they'd be older than our own
+// local edits and would briefly revert them); once the queue drains the latest version
+// is fetched and applied.
+let classWriteChain = Promise.resolve();
+let classWritesPending = 0;
+function writeClasses(mutator) {
+  classWritesPending++;
+  const run = () => runTransaction(db, async (tx) => {
+    const snap = await tx.get(storeDoc('teacherClasses'));
+    const list = snap.exists() ? (snap.data().value || []) : [];
+    tx.set(storeDoc('teacherClasses'), { value: mutator(list) });
+  });
+  const result = classWriteChain.then(run);
+  classWriteChain = result.catch(() => {});
+  return result.finally(async () => {
+    if (--classWritesPending > 0) return;
+    const latest = await getDoc(storeDoc('teacherClasses'));
+    applyStoreValue('teacherClasses', latest.data()?.value);
+    renderAfterStoreChange('teacherClasses');
+  });
+}
+const saveClass = (cls) => {
+  const clean = publicClass(cls);
+  return writeClasses((list) => (list.some((c) => c.id === clean.id) ? list.map((c) => (c.id === clean.id ? clean : c)) : [...list, clean]))
+    .catch((err) => console.error('Nie udało się zapisać klasy', err));
 };
+// Edits are applied to the server's current copy of the class (not to our possibly
+// stale one), so two quick edits — or two teachers editing different fields — can't
+// overwrite each other. `mutate` therefore runs twice (locally for instant feedback,
+// then on the server copy) and must only use its closed-over values.
+function updateClass(id, mutate) {
+  const local = teacherClasses().find((c) => c.id === id);
+  if (local) mutate(local);
+  return writeClasses((list) => list.map((c) => {
+    if (c.id !== id) return c;
+    const copy = { ...c, students: [...c.students], apart: [...(c.apart || [])] };
+    mutate(copy);
+    return publicClass(copy);
+  })).catch((err) => console.error('Nie udało się zapisać klasy', err));
+}
+const deleteClassRemote = (id) => writeClasses((list) => list.filter((c) => c.id !== id))
+  .catch((err) => console.error('Nie udało się usunąć klasy', err));
+function createClass(fields) {
+  const cls = { id: crypto.randomUUID(), name: `Klasa ${teacherClasses().length + 1}`, students: [], apart: [], createdBy: currentUser?.name || '', ...fields };
+  state.teacherClasses = [...state.teacherClasses, cls];
+  saveClass(cls);
+  return cls;
+}
+// The draw history is per teacher and per class.
+const pickHistory = (classId) => currentAccount()?.pickHistory?.[classId] || [];
+function setPickHistory(classId, names) {
+  const account = currentAccount();
+  if (!account) return;
+  (account.pickHistory || (account.pickHistory = {}))[classId] = names;
+  saveTeacherTools();
+}
+// Classes used to be stored on each teacher's own account; move any such leftovers into
+// the shared list (skipping ids already there) and carry their draw history across.
+async function migrateAccountClasses() {
+  const before = currentAccount();
+  const own = before?.teacherClasses;
+  if (!own?.length) return;
+  const moved = own.map((c) => publicClass({ ...c, createdBy: c.createdBy || before.name }));
+  const histories = Object.fromEntries(own.filter((c) => c.recent?.length).map((c) => [c.id, c.recent]));
+  await writeClasses((list) => [...list, ...moved.filter((c) => !list.some((x) => x.id === c.id))]);
+  // Re-fetch the account: a live update may have replaced the object during the await.
+  const account = currentAccount();
+  if (!account) return;
+  account.pickHistory = { ...histories, ...(account.pickHistory || {}) };
+  account.teacherClasses = [];
+  saveTeacherTools();
+}
 const activeClassTool = () => teacherToolsFor().find((t) => t.id === state.activeTool);
 const toolClass = (tool) => teacherClasses().find((c) => c.id === tool?.classId) || null;
 function renameTool(tool, value) {
@@ -1999,8 +2086,8 @@ function renameTool(tool, value) {
 // class once, then link the tool to it (or to the teacher's only class if it has none).
 function linkToolToClass(tool) {
   if (!tool.classId && tool.students?.length) {
-    const cls = { id: crypto.randomUUID(), name: tool.label || `Klasa ${teacherClasses().length + 1}`, students: tool.students, apart: tool.apart || [], recent: tool.recent || [] };
-    teacherClasses().push(cls);
+    const cls = createClass({ name: tool.label || `Klasa ${teacherClasses().length + 1}`, students: tool.students, apart: tool.apart || [] });
+    if (tool.recent?.length) setPickHistory(cls.id, tool.recent);
     tool.classId = cls.id;
   }
   ['students', 'apart', 'recent'].forEach((key) => delete tool[key]);
@@ -2024,7 +2111,7 @@ function renderClassBars() {
     bar.querySelector('[data-class-select]').value = cls ? cls.id : '';
     bar.querySelector('[data-class-edit]').disabled = !cls;
     bar.querySelector('[data-class-summary]').textContent = cls
-      ? `${studentsLabel(cls.students.length)}${cls.apart.length ? ` · reguł grup: ${cls.apart.length}` : ''}`
+      ? `${studentsLabel(cls.students.length)}${cls.apart.length ? ` · reguł grup: ${cls.apart.length}` : ''}${cls.createdBy ? ` · dodał(a): ${cls.createdBy}` : ''}`
       : '';
   });
 }
@@ -2041,8 +2128,7 @@ document.querySelectorAll('[data-class-bar]').forEach((bar) => {
   bar.querySelector('[data-class-add]').addEventListener('click', () => {
     const tool = activeClassTool();
     if (!tool) return;
-    const cls = { id: crypto.randomUUID(), name: `Klasa ${teacherClasses().length + 1}`, students: [], apart: [], recent: [] };
-    teacherClasses().push(cls);
+    const cls = createClass({});
     tool.classId = cls.id;
     delete state.pickerResult[tool.id];
     delete state.groupsResult[tool.id];
@@ -2077,8 +2163,8 @@ function renderClassEditor() {
     `<span class="inline-flex items-center gap-1.5 rounded-lg bg-app px-2.5 py-1 text-sm font-bold">${escapeHtml(a)} ✕ ${escapeHtml(b)}<button type="button" class="font-bold text-red-600" data-remove-apart="${i}" aria-label="Usuń regułę">×</button></span>`
   ).join('') : '<span class="text-sm text-muted">Brak reguł.</span>';
   list.querySelectorAll('[data-remove-apart]').forEach((b) => b.addEventListener('click', () => {
-    cls.apart.splice(Number(b.dataset.removeApart), 1);
-    saveTeacherTools();
+    const { a, b: other } = cls.apart[Number(b.dataset.removeApart)];
+    updateClass(cls.id, (c) => { c.apart = c.apart.filter((p) => !(p.a === a && p.b === other)); });
     renderClassEditor();
     renderToolScreen();
   }));
@@ -2091,9 +2177,9 @@ function openClassEditor(id) {
 document.querySelector('#classNameInput').addEventListener('change', (e) => {
   const cls = editingClass();
   if (!cls) return;
-  cls.name = e.target.value.trim() || cls.name;
-  e.target.value = cls.name;
-  saveTeacherTools();
+  const name = e.target.value.trim() || cls.name;
+  e.target.value = name;
+  updateClass(cls.id, (c) => { c.name = name; });
   renderToolScreen();
 });
 document.querySelector('#classNamesInput').addEventListener('input', (e) => {
@@ -2102,10 +2188,11 @@ document.querySelector('#classNamesInput').addEventListener('input', (e) => {
 document.querySelector('#classNamesInput').addEventListener('change', (e) => {
   const cls = editingClass();
   if (!cls) return;
-  cls.students = parseRoster(e.target.value);
-  cls.apart = cls.apart.filter(({ a, b }) => cls.students.includes(a) && cls.students.includes(b));
-  cls.recent = (cls.recent || []).filter((n) => cls.students.includes(n));
-  saveTeacherTools();
+  const names = parseRoster(e.target.value);
+  updateClass(cls.id, (c) => {
+    c.students = names;
+    c.apart = c.apart.filter(({ a, b }) => names.includes(a) && names.includes(b));
+  });
   renderClassEditor();
   renderToolScreen();
 });
@@ -2115,16 +2202,16 @@ document.querySelector('#classApartAdd').addEventListener('click', () => {
   const a = document.querySelector('#classApartA').value;
   const b = document.querySelector('#classApartB').value;
   if (!a || !b || a === b || cls.apart.some((p) => (p.a === a && p.b === b) || (p.a === b && p.b === a))) return;
-  cls.apart.push({ a, b }); // objects, not [a, b]: Firestore rejects nested arrays
-  saveTeacherTools();
+  // objects, not [a, b]: Firestore rejects nested arrays
+  updateClass(cls.id, (c) => { if (!c.apart.some((p) => (p.a === a && p.b === b) || (p.a === b && p.b === a))) c.apart.push({ a, b }); });
   renderClassEditor();
   renderToolScreen();
 });
 document.querySelector('#classDeleteBtn').addEventListener('click', () => {
   const cls = editingClass();
-  if (!cls || !confirm(`Usunąć klasę „${cls.name}”?`)) return;
-  const account = currentAccount();
-  account.teacherClasses = teacherClasses().filter((c) => c.id !== cls.id);
+  if (!cls || !confirm(`Usunąć klasę „${cls.name}” dla wszystkich nauczycieli?`)) return;
+  state.teacherClasses = teacherClasses().filter((c) => c.id !== cls.id);
+  deleteClassRemote(cls.id);
   teacherToolsFor().forEach((t) => { if (t.classId === cls.id) t.classId = null; });
   saveTeacherTools();
   classEditorDialog.close();
@@ -2205,9 +2292,12 @@ function setDrawButton(selector, busy) {
 }
 
 // -- Random person --
+// This teacher's own recent draws for the class (people since removed from the class
+// are ignored).
+const recentPicks = (cls) => pickHistory(cls.id).filter((n) => cls.students.includes(n)).slice(-PICK_COOLDOWN);
 function pickerBlocked(cls) {
   const cooldown = Math.min(PICK_COOLDOWN, Math.max(0, cls.students.length - 1));
-  return { cooldown, names: cooldown > 0 ? (cls.recent || []).slice(-cooldown) : [] };
+  return { cooldown, names: cooldown > 0 ? recentPicks(cls).slice(-cooldown) : [] };
 }
 function renderPickerScreen() {
   const tool = activeClassTool();
@@ -2226,7 +2316,7 @@ function renderPickerScreen() {
   }
   const { cooldown } = pickerBlocked(cls);
   info.textContent = `Wylosowana osoba nie wypadnie przez następne ${cooldown} ${cooldown === 1 ? 'losowanie' : cooldown < 5 ? 'losowania' : 'losowań'}.${cls.students.length - 1 < PICK_COOLDOWN ? ' (Przy tak małej klasie blokada jest krótsza.)' : ''}`;
-  const recent = (cls.recent || []).slice(-PICK_COOLDOWN).reverse();
+  const recent = recentPicks(cls).reverse();
   recentEl.innerHTML = recent.length ? recent.map((name, i) => {
     const left = cooldown - i;
     return `<span class="rounded-lg bg-app px-2.5 py-1 text-sm font-bold${left > 0 ? '' : ' text-muted line-through'}">${escapeHtml(name)}${left > 0 ? ` <span class="font-normal text-muted">(jeszcze ${left})</span>` : ''}</span>`;
@@ -2247,9 +2337,8 @@ async function drawPerson() {
   const blocked = new Set(pickerBlocked(cls).names);
   const candidates = cls.students.filter((s) => !blocked.has(s));
   const name = candidates[randomInt(candidates.length)];
-  cls.recent = [...(cls.recent || []), name].slice(-PICK_COOLDOWN);
+  setPickHistory(cls.id, [...recentPicks(cls), name].slice(-PICK_COOLDOWN));
   state.pickerResult[tool.id] = name;
-  saveTeacherTools();
   if (animationsOn()) {
     drawInProgress = true;
     setDrawButton('#pickerDraw', true);
@@ -2267,8 +2356,7 @@ document.querySelector('#pickerScreenLabel').addEventListener('change', (e) => {
 document.querySelector('#pickerClearRecent').addEventListener('click', () => {
   const cls = toolClass(activeClassTool());
   if (!cls) return;
-  cls.recent = [];
-  saveTeacherTools();
+  setPickHistory(cls.id, []);
   renderPickerScreen();
 });
 
@@ -2440,7 +2528,10 @@ function setupUserInterface() {
   document.querySelector('#navCompetences').classList.toggle('hidden', isTeacher());
   document.querySelector('#navTeacherTools').classList.toggle('hidden', !isTeacher());
   state.teacherToolsEditing = false;
-  if (isTeacher()) renderTeacherTools();
+  if (isTeacher()) {
+    renderTeacherTools();
+    migrateAccountClasses().catch((err) => console.error('Nie udało się przenieść klas na wspólną listę', err));
+  }
   renderSubjects();
   renderSchedule();
   renderAnnouncements();
