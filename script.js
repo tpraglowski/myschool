@@ -1848,10 +1848,17 @@ function ensureTimerRuntime(tool) {
 }
 // A tile is just an entry point — clicking it opens that tool's own full-screen view
 // (the timer tile never shows the countdown itself).
+const MAX_PINNED_TOOLS = 5;
+const pinnedCount = () => teacherToolsFor().filter((t) => t.pinned).length;
+const tileButton = (attrs, label, content, extra = '') => `<span role="button" tabindex="0" class="grid h-8 min-w-8 place-items-center rounded-lg bg-app px-1.5 text-sm font-bold ${extra}" ${attrs} aria-label="${label}" title="${label}">${content}</span>`;
 function toolTileHtml(tool, editing) {
   const info = toolTypeInfo(tool.type);
-  return `<button type="button" class="relative min-h-[140px] rounded-[20px] border border-line bg-card p-5 text-left shadow-[0_7px_22px_var(--shadow)] transition hover:-translate-y-1 hover:shadow-lg" data-open-tool="${tool.id}">
-    ${editing ? `<span class="absolute right-3 top-3 z-10 rounded-lg bg-app px-2 py-1 text-sm font-bold text-red-600" data-delete-tool="${tool.id}" aria-label="Usuń narzędzie">🗑</span>` : ''}
+  return `<button type="button" class="relative min-h-[140px] rounded-[20px] border bg-card p-5 text-left shadow-[0_7px_22px_var(--shadow)] transition hover:-translate-y-1 hover:shadow-lg ${tool.pinned ? 'border-primary' : 'border-line'}" data-open-tool="${tool.id}">
+    <span class="absolute right-3 top-3 z-10 flex gap-1.5">
+      ${tileButton(`data-pin-tool="${tool.id}"`, tool.pinned ? 'Odepnij' : 'Przypnij', '📌', tool.pinned ? 'bg-primary text-white' : 'opacity-60')}
+      ${tileButton(`data-settings-tool="${tool.id}"`, 'Ustawienia narzędzia', '⚙')}
+      ${editing ? tileButton(`data-delete-tool="${tool.id}"`, 'Usuń narzędzie', '🗑', 'text-red-600') : ''}
+    </span>
     <span class="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-app text-xl">${info.icon}</span>
     <b class="block truncate">${escapeHtml(tool.label || info.name)}</b>
     <span class="text-[.85em] text-muted">${info.name}</span>
@@ -1865,26 +1872,124 @@ function openTool(id) {
   else if (tool.type === 'seating') openSeatingScreen(id);
   else openTimerScreen(id);
 }
+function deleteTool(id) {
+  const account = currentAccount();
+  account.teacherTools = teacherToolsFor().filter((t) => t.id !== id);
+  delete state.timerRuntime[id];
+  delete state.pickerResult[id];
+  delete state.groupsResult[id];
+  saveTeacherTools();
+  renderTeacherTools();
+  updateHeaderTimerIndicator();
+}
+// At most MAX_PINNED_TOOLS tools can be pinned; pinned ones are listed first.
+function setPinned(tool, pinned) {
+  if (pinned && !tool.pinned && pinnedCount() >= MAX_PINNED_TOOLS) return false;
+  tool.pinned = pinned;
+  saveTeacherTools();
+  renderTeacherTools();
+  return true;
+}
+let pinNoteTimer = null;
+function showPinNote() {
+  const note = document.querySelector('#pinNote');
+  note.textContent = `Możesz przypiąć maksymalnie ${MAX_PINNED_TOOLS} narzędzi — najpierw odepnij któreś.`;
+  note.classList.remove('hidden');
+  clearTimeout(pinNoteTimer);
+  pinNoteTimer = setTimeout(() => note.classList.add('hidden'), 4000);
+}
 function bindTeacherToolsEvents(el) {
   document.querySelector('#addTeacherTool')?.addEventListener('click', openToolPicker);
-  el.querySelectorAll('[data-delete-tool]').forEach((b) => {
+  const onTileButton = (selector, handler) => el.querySelectorAll(selector).forEach((b) => {
     b.addEventListener('pointerdown', (e) => e.stopPropagation());
-    b.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!confirm('Usunąć to narzędzie?')) return;
-      const account = currentAccount();
-      account.teacherTools = teacherToolsFor().filter((t) => t.id !== b.dataset.deleteTool);
-      delete state.timerRuntime[b.dataset.deleteTool];
-      delete state.pickerResult[b.dataset.deleteTool];
-      delete state.groupsResult[b.dataset.deleteTool];
-      saveTeacherTools();
-      renderTeacherTools();
-      updateHeaderTimerIndicator();
-    });
+    const run = (e) => { e.preventDefault(); e.stopPropagation(); handler(b); };
+    b.addEventListener('click', run);
+    b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') run(e); });
   });
+  onTileButton('[data-delete-tool]', (b) => { if (confirm('Usunąć to narzędzie?')) deleteTool(b.dataset.deleteTool); });
+  onTileButton('[data-pin-tool]', (b) => {
+    const tool = teacherToolsFor().find((t) => t.id === b.dataset.pinTool);
+    if (tool && !setPinned(tool, !tool.pinned)) showPinNote();
+  });
+  onTileButton('[data-settings-tool]', (b) => openToolSettings(b.dataset.settingsTool));
   el.querySelectorAll('[data-open-tool]').forEach((b) => b.addEventListener('click', () => openTool(b.dataset.openTool)));
 }
+const toolSectionTitle = (text) => `<h3 class="col-span-full text-sm font-bold uppercase tracking-wide text-muted">${text}</h3>`;
+function renderToolSections(tools, editing) {
+  const pinned = tools.filter((t) => t.pinned);
+  if (!pinned.length) return tools.map((t) => toolTileHtml(t, editing)).join('');
+  const rest = tools.filter((t) => !t.pinned);
+  return toolSectionTitle(`📌 Przypięte (${pinned.length}/${MAX_PINNED_TOOLS})`)
+    + pinned.map((t) => toolTileHtml(t, editing)).join('')
+    + (rest.length || editing ? toolSectionTitle('Pozostałe narzędzia') : '')
+    + rest.map((t) => toolTileHtml(t, editing)).join('');
+}
+// Per-tool settings dialog. Everything applies immediately (no save button to forget).
+const toolSettingsDialog = document.querySelector('#toolSettings');
+let settingsToolId = null;
+const settingsTool = () => teacherToolsFor().find((t) => t.id === settingsToolId);
+function renderToolSettings() {
+  const tool = settingsTool();
+  if (!tool) { toolSettingsDialog.close(); return; }
+  const info = toolTypeInfo(tool.type);
+  const classTool = ['picker', 'groups', 'seating'].includes(tool.type);
+  document.querySelector('#toolSettingsType').textContent = `${info.icon} ${info.name}`;
+  document.querySelector('#toolSettingsName').placeholder = info.name;
+  if (document.activeElement !== document.querySelector('#toolSettingsName')) document.querySelector('#toolSettingsName').value = tool.label || '';
+  document.querySelector('#toolSettingsClassRow').classList.toggle('hidden', !classTool);
+  if (classTool) {
+    const select = document.querySelector('#toolSettingsClass');
+    select.innerHTML = `<option value="">— brak —</option>${teacherClasses().map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}`;
+    select.value = toolClass(tool)?.id || '';
+  }
+  document.querySelector('#toolSettingsManualRow').classList.toggle('hidden', tool.type !== 'seating');
+  document.querySelector('#toolSettingsManual').checked = !!tool.manualRows;
+  const pin = document.querySelector('#toolSettingsPin');
+  pin.checked = !!tool.pinned;
+  const full = !tool.pinned && pinnedCount() >= MAX_PINNED_TOOLS;
+  pin.disabled = full;
+  document.querySelector('#toolSettingsPinNote').textContent = full
+    ? `Masz już ${MAX_PINNED_TOOLS} przypiętych narzędzi — odepnij któreś, żeby przypiąć to.`
+    : `Przypięte narzędzia są na górze listy (${pinnedCount()}/${MAX_PINNED_TOOLS}).`;
+}
+function openToolSettings(id) {
+  settingsToolId = id;
+  renderToolSettings();
+  document.querySelector('#toolSettingsName').value = settingsTool()?.label || '';
+  toolSettingsDialog.showModal();
+}
+document.querySelector('#toolSettingsName').addEventListener('change', (e) => {
+  const tool = settingsTool();
+  if (!tool) return;
+  renameTool(tool, e.target.value);
+  renderTeacherTools();
+});
+document.querySelector('#toolSettingsClass').addEventListener('change', (e) => {
+  const tool = settingsTool();
+  if (!tool) return;
+  tool.classId = e.target.value || null;
+  delete state.pickerResult[tool.id];
+  delete state.groupsResult[tool.id];
+  saveTeacherTools();
+});
+document.querySelector('#toolSettingsManual').addEventListener('change', (e) => {
+  const tool = settingsTool();
+  if (!tool) return;
+  setSeatManualRows(tool, e.target.checked);
+  saveTeacherTools();
+});
+document.querySelector('#toolSettingsPin').addEventListener('change', (e) => {
+  const tool = settingsTool();
+  if (!tool) return;
+  if (!setPinned(tool, e.target.checked)) e.target.checked = false;
+  renderToolSettings();
+});
+document.querySelector('#toolSettingsDelete').addEventListener('click', () => {
+  if (!settingsTool() || !confirm('Usunąć to narzędzie?')) return;
+  deleteTool(settingsToolId);
+  toolSettingsDialog.close();
+});
+document.querySelector('#toolSettingsDone').addEventListener('click', () => toolSettingsDialog.close());
 function renderTeacherTools() {
   if (!isTeacher()) return;
   const tools = teacherToolsFor();
@@ -1894,7 +1999,7 @@ function renderTeacherTools() {
   const el = document.querySelector('#teacherToolsGrid');
   el.innerHTML = !tools.length && !editing
     ? emptyState('Brak narzędzi', 'Kliknij „Edytuj”, aby dodać pierwsze narzędzie.')
-    : tools.map((tool) => toolTileHtml(tool, editing)).join('') + addTileHtml;
+    : renderToolSections(tools, editing) + addTileHtml;
   bindTeacherToolsEvents(el);
 }
 document.querySelector('#editTeacherTools').addEventListener('click', () => {
@@ -2856,15 +2961,18 @@ document.addEventListener('keydown', (e) => {
 });
 
 // -- Row numbering: automatic (from positions) or typed in per desk --
-document.querySelector('#seatManualToggle').addEventListener('change', (e) => {
-  const tool = seatTool();
-  if (!tool) return;
-  if (e.target.checked) {
+function setSeatManualRows(tool, on) {
+  if (on) {
     // Start from the numbers the automatic system currently shows, so nothing jumps.
     const { rowOf } = deskRows(tool.desks, false);
     tool.desks.forEach((d) => { if (!d.num) d.num = Math.min(SEAT_ROW_MAX, rowOf[d.id]); });
   }
-  tool.manualRows = e.target.checked;
+  tool.manualRows = on;
+}
+document.querySelector('#seatManualToggle').addEventListener('change', (e) => {
+  const tool = seatTool();
+  if (!tool) return;
+  setSeatManualRows(tool, e.target.checked);
   seatLayoutChanged();
 });
 function renderSeatNumField() {

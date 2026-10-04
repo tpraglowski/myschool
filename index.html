@@ -162,6 +162,7 @@
         <div><h1 class="text-[clamp(1.7em,4vw,2.5em)] font-extrabold tracking-tight">Teacher Tools</h1><p class="mt-1.5 text-muted">Twoje narzędzia — widoczne tylko dla Ciebie.</p></div>
         <button class="self-start rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="editTeacherTools">Edytuj</button>
       </div>
+      <p class="mb-3 hidden rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" id="pinNote"></p>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-[17px]" id="teacherToolsGrid"></div>
     </section>
 
@@ -696,6 +697,34 @@
     </div>
   </dialog>
 
+  <dialog class="w-[min(420px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="toolSettings">
+    <div class="p-6">
+      <h2 class="text-[1.35em] font-bold">Ustawienia narzędzia</h2>
+      <p class="mb-4 text-sm text-muted" id="toolSettingsType"></p>
+      <label class="mb-1 block text-sm font-bold" for="toolSettingsName">Nazwa</label>
+      <input class="w-full rounded-[11px] border border-line bg-app px-3 py-2.5 text-ink outline-primary" id="toolSettingsName" maxlength="40" autocomplete="off" />
+      <div class="mt-4 hidden" id="toolSettingsClassRow">
+        <label class="mb-1 block text-sm font-bold" for="toolSettingsClass">Klasa</label>
+        <select class="w-full rounded-[11px] border border-line bg-app px-3 py-2.5 text-ink" id="toolSettingsClass"></select>
+      </div>
+      <label class="mt-4 flex cursor-pointer select-none items-center gap-3 text-sm font-bold" id="toolSettingsManualRow">
+        <input class="peer sr-only" type="checkbox" id="toolSettingsManual" />
+        <span class="relative h-5 w-9 shrink-0 rounded-full bg-line transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-4"></span>
+        Własne numery rzędów
+      </label>
+      <label class="mt-4 flex cursor-pointer select-none items-center gap-3 text-sm font-bold">
+        <input class="peer sr-only" type="checkbox" id="toolSettingsPin" />
+        <span class="relative h-5 w-9 shrink-0 rounded-full bg-line transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-4 peer-disabled:opacity-40"></span>
+        📌 Przypięte
+      </label>
+      <p class="mt-1 text-xs text-muted" id="toolSettingsPinNote"></p>
+      <div class="mt-6 flex items-center justify-between gap-3">
+        <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-red-600" type="button" id="toolSettingsDelete">Usuń narzędzie</button>
+        <button class="rounded-xl bg-primary px-5 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" type="button" id="toolSettingsDone">Gotowe</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="w-[min(360px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="subjectColorEditor">
     <form class="p-6" method="dialog">
       <h2 class="mb-[18px] text-[1.35em] font-bold">Zmień kolor przedmiotu</h2>
@@ -772,6 +801,6 @@
     </form>
   </div>
 
-  <script type="module" src="script.js?v=20261004d"></script>
+  <script type="module" src="script.js?v=20261004f"></script>
 </body>
 </html>
