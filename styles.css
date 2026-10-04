@@ -61,6 +61,21 @@ body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in 
 .layout-simple [data-technical] { display: none !important; }
 #pickerScreen.layout-simple > .grid { grid-template-columns: minmax(0, 640px); justify-content: center; }
 #seatingScreen.layout-simple .seat-row-no { display: none; }
+/* Simple view of the seating tool: compact chrome and a board sized by fitSeatBoard() so
+   everything is visible without scrolling. */
+#seatingScreen.layout-simple > .h-\[18px\] { height: 8px; }
+#seatingScreen.layout-simple #seatBoard { min-width: 0; }
+#seatingScreen.layout-simple > div { padding: 14px; }
+#seatingScreen.layout-simple .seat-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 10px; }
+#seatingScreen.layout-simple .seat-left { display: flex; flex: 1 1 300px; align-items: center; gap: 10px; min-width: 0; }
+#seatingScreen.layout-simple .seat-left > input { flex: 0 1 170px; width: auto; margin: 0; min-width: 0; }
+#seatingScreen.layout-simple .seat-left > [data-class-bar] { flex: 1 1 150px; min-width: 0; }
+#seatingScreen.layout-simple .seat-left h3 { display: none; }
+#seatingScreen.layout-simple .seat-actions { justify-content: flex-start; }
+/* All tool screens: tighter page chrome so they fit one screen without scrolling. */
+body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen):not(.hidden)) main { padding-bottom: 12px; }
+body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen):not(.hidden)) header { margin-bottom: 14px; }
+:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen) > .h-\[18px\] { height: 8px; }
 
 /* Fade-in used on the view that becomes active */
 @keyframes appear {
@@ -104,7 +119,8 @@ body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in 
 .seat-desk.filled { --seat-fill: color-mix(in srgb, var(--primary) 16%, var(--card)); }
 .seat-desk.selected .seat-shape path { stroke: var(--primary); stroke-width: 3; }
 .seat-remove { position: absolute; top: -7px; right: -7px; z-index: 2; width: 22px; height: 22px; border-radius: 999px; border: 0; background: #dc2626; color: #fff; font-size: 15px; font-weight: 800; line-height: 1; display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 6px #0004; }
-.seat-label { position: absolute; inset: 0; display: grid; place-items: center; padding: 0 3px; text-align: center; font-size: .68rem; font-weight: 700; line-height: 1.15; pointer-events: none; }
+#seatBoard { container-type: inline-size; margin-inline: auto; }
+.seat-label { position: absolute; inset: 0; display: grid; place-items: center; padding: 0 2%; text-align: center; font-size: .68rem; font-size: var(--seat-fs, 1.6cqw); font-weight: 800; line-height: 1.15; pointer-events: none; }
 .seat-name { display: inline-block; white-space: pre-line; }
 .seat-row-no { color: var(--muted); font-weight: 600; opacity: .7; }
 

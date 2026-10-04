@@ -3092,6 +3092,25 @@ function writeSeatLayouts(mutator) {
 const canDeleteLayout = (layout) => !!layout && (isAdmin() || normalise(layout.createdBy || '') === normalise(currentUser?.name || ''));
 
 const seatBoardEl = document.querySelector('#seatBoard');
+// Names on the desks are sized in cqw (a share of the board's own width), NOT in rem, so
+// they stay big and readable whatever "Wielkość tekstu" is set to. Each name gets the
+// largest size at which its longest line (first name / surname) still fits the desk.
+function seatFontSize(name) {
+  const longest = Math.max(...seatName(name).split('\n').map((line) => line.length));
+  return Math.round(clamp(8.4 / (Math.max(longest, 1) * 0.58), 1.15, 3.4) * 100) / 100;
+}
+// Simple view: scale the board so the whole room AND the "Losuj miejsca" button fit on the
+// screen at once — the page never has to be scrolled.
+function fitSeatBoard() {
+  const screen = document.querySelector('#seatingScreen');
+  const wrap = seatBoardEl.parentElement;
+  if (!screen.classList.contains('layout-simple') || screen.classList.contains('hidden')) { seatBoardEl.style.width = ''; return; }
+  const top = wrap.getBoundingClientRect().top + window.scrollY;
+  const available = window.innerHeight - top - 14 - 12 - 6; // card padding + page padding + slack
+  const width = Math.max(260, Math.min(wrap.clientWidth, available * (100 / BOARD_H)));
+  seatBoardEl.style.width = `${Math.floor(width)}px`;
+}
+window.addEventListener('resize', fitSeatBoard);
 const seatTool = () => activeClassTool();
 const seatPlanFor = (tool, cls) => (cls && tool.seatPlans?.[cls.id]) || {};
 function renderSeatBoard(animate = false) {
@@ -3105,9 +3124,10 @@ function renderSeatBoard(animate = false) {
     const name = seated(d);
     const selected = state.seatEditing && state.selectedDesk === d.id;
     const label = name ? (animate ? '' : escapeHtml(seatName(name))) : `<span class="seat-row-no">${rowOf[d.id] || ''}</span>`;
+    const fontSize = name ? seatFontSize(name) : null;
     return `<div class="seat-desk${name ? ' filled' : ''}${selected ? ' selected' : ''}${state.seatEditing ? ' editable' : ''}" data-desk="${d.id}" style="left:${d.x}%;top:${(d.y / BOARD_H) * 100}%;width:${DESK_W}%;height:${(DESK_H / BOARD_H) * 100}%">
       <svg class="seat-shape" viewBox="0 0 74 68" preserveAspectRatio="none" style="transform:rotate(${d.angle || 0}deg)"><path d="${DESK_PATH}"/></svg>
-      <span class="seat-label"><span class="seat-name">${label}</span></span>
+      <span class="seat-label"${fontSize ? ` style="--seat-fs:${fontSize}cqw"` : ''}><span class="seat-name">${label}</span></span>
       ${state.seatEditing ? '<button type="button" class="seat-remove" data-desk-del title="Usuń stolik" aria-label="Usuń stolik">×</button>' : ''}
     </div>`;
   }).join('');
@@ -3136,6 +3156,7 @@ function renderSeatingScreen() {
   if (cls?.seatRows.length) info.push(`reguł rzędów: ${cls.seatRows.length}`);
   document.querySelector('#seatInfo').textContent = cls ? info.join(' · ') : `${info.join(' · ')} — wybierz klasę albo dodaj nową (+).`;
   renderSeatBoard();
+  fitSeatBoard();
 }
 function openSeatingScreen(id) {
   state.activeTool = id;
@@ -3146,6 +3167,7 @@ function openSeatingScreen(id) {
   document.querySelector('#seatError').classList.add('hidden');
   renderSeatingScreen();
   show('seatingScreen');
+  fitSeatBoard(); // the screen is only measurable once it is visible
 }
 
 // Each seated desk flickers through a few random names, then the real one drops in with
@@ -3175,7 +3197,7 @@ async function drawSeating() {
   if (!tool) return;
   const cls = toolClass(tool);
   const error = document.querySelector('#seatError');
-  const fail = (message) => { error.textContent = message; error.classList.remove('hidden'); };
+  const fail = (message) => { error.textContent = message; error.classList.remove('hidden'); fitSeatBoard(); };
   if (!cls) return fail(tool.simpleView ? 'Wybierz klasę z listy.' : 'Wybierz klasę albo dodaj nową (+).');
   const fullHint = tool.simpleView ? ' Przełącz na widok „Pełny”.' : '';
   if (!cls.students.length) return fail(`Ta klasa nie ma jeszcze uczniów — kliknij ✎ i wpisz listę.${fullHint}`);
