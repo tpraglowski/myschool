@@ -2997,9 +2997,19 @@ function deskRows(desks, manual = false) {
   return { rowOf, rows, rowCount: rows.size };
 }
 const deskDistance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+// A name with spaces is shown on two lines, split at the space that keeps the lines most
+// even ("Anna Maria / Kowalska-Nowak" rather than a long second line); one word stays whole.
 const seatName = (name) => {
-  const i = name.indexOf(' ');
-  return i < 0 ? name : `${name.slice(0, i)}\n${name.slice(i + 1)}`;
+  const words = name.trim().split(/\s+/);
+  if (words.length < 2) return name.trim();
+  let best = null;
+  for (let k = 1; k < words.length; k++) {
+    const first = words.slice(0, k).join(' ');
+    const second = words.slice(k).join(' ');
+    const worst = Math.max(first.length, second.length);
+    if (!best || worst < best.worst) best = { worst, text: `${first}\n${second}` };
+  }
+  return best.text;
 };
 
 // Randomized backtracking, like the group draw: most-constrained people are seated first
@@ -3093,11 +3103,17 @@ const canDeleteLayout = (layout) => !!layout && (isAdmin() || normalise(layout.c
 
 const seatBoardEl = document.querySelector('#seatBoard');
 // Names on the desks are sized in cqw (a share of the board's own width), NOT in rem, so
-// they stay big and readable whatever "Wielkość tekstu" is set to. Each name gets the
-// largest size at which its longest line (first name / surname) still fits the desk.
+// they stay readable whatever "Wielkość tekstu" is set to. Each name gets the largest size
+// (up to SEAT_FONT_MAX) at which its widest line, measured in the real bold font, still
+// fits inside the desk — longer names simply shrink.
+const SEAT_FONT_MAX = 2.4;
+const SEAT_FONT_MIN = 0.55;
+const SEAT_TEXT_WIDTH = 7.6; // usable width of a desk in cqw (the trapezoid narrows towards the back)
+const seatMeasure = document.createElement('canvas').getContext('2d');
 function seatFontSize(name) {
-  const longest = Math.max(...seatName(name).split('\n').map((line) => line.length));
-  return Math.round(clamp(8.4 / (Math.max(longest, 1) * 0.58), 1.15, 2.4) * 100) / 100;
+  seatMeasure.font = `800 100px ${getComputedStyle(seatBoardEl).fontFamily}`;
+  const widest = Math.max(...seatName(name).split('\n').map((line) => seatMeasure.measureText(line).width)) / 100; // width at font size 1
+  return Math.round(clamp(SEAT_TEXT_WIDTH / Math.max(widest, 0.1), SEAT_FONT_MIN, SEAT_FONT_MAX) * 100) / 100;
 }
 // Simple view: scale the board so the whole room AND the "Losuj miejsca" button fit on the
 // screen at once — the page never has to be scrolled.
