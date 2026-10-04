@@ -219,6 +219,7 @@
               <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
               <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
               <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę">✎</button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę">📌</button>
             </div>
             <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
           </div>
@@ -243,6 +244,7 @@
               <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
               <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
               <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę">✎</button>
+              <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę">📌</button>
             </div>
             <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
           </div>
@@ -276,6 +278,7 @@
                 <select class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" data-class-select aria-label="Klasa"></select>
                 <button type="button" class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" data-class-add title="Nowa klasa" aria-label="Nowa klasa">+</button>
                 <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-edit title="Edytuj klasę" aria-label="Edytuj klasę">✎</button>
+                <button type="button" class="rounded-lg bg-app px-3 py-2 font-extrabold text-primary disabled:opacity-40" data-class-pin title="Przypnij klasę" aria-label="Przypnij klasę">📌</button>
               </div>
               <p class="mt-1.5 text-xs text-muted" data-class-summary></p>
             </div>
@@ -699,14 +702,10 @@
 
   <dialog class="w-[min(420px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="toolSettings">
     <div class="p-6">
-      <h2 class="text-[1.35em] font-bold">Ustawienia narzędzia</h2>
-      <p class="mb-4 text-sm text-muted" id="toolSettingsType"></p>
+      <h2 class="text-[1.35em] font-bold">Ustawienia rozsadzania</h2>
+      <p class="mb-4 text-sm text-muted"><span id="toolSettingsType"></span> · dla wszystkich klas</p>
       <label class="mb-1 block text-sm font-bold" for="toolSettingsName">Nazwa</label>
       <input class="w-full rounded-[11px] border border-line bg-app px-3 py-2.5 text-ink outline-primary" id="toolSettingsName" maxlength="40" autocomplete="off" />
-      <div class="mt-4 hidden" id="toolSettingsClassRow">
-        <label class="mb-1 block text-sm font-bold" for="toolSettingsClass">Klasa</label>
-        <select class="w-full rounded-[11px] border border-line bg-app px-3 py-2.5 text-ink" id="toolSettingsClass"></select>
-      </div>
       <label class="mt-4 flex cursor-pointer select-none items-center gap-3 text-sm font-bold" id="toolSettingsManualRow">
         <input class="peer sr-only" type="checkbox" id="toolSettingsManual" />
         <span class="relative h-5 w-9 shrink-0 rounded-full bg-line transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-4"></span>
@@ -801,6 +800,6 @@
     </form>
   </div>
 
-  <script type="module" src="script.js?v=20261004f"></script>
+  <script type="module" src="script.js?v=20261004g"></script>
 </body>
 </html>

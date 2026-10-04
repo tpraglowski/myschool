@@ -103,7 +103,7 @@ const normalizeSubjectsByClass = (byClass) => {
 const legacyStarterByGrade = JSON.parse(localStorage.getItem('schoolStarterSubjectsByGrade') || 'null');
 const legacyStarterSubjects = JSON.parse(localStorage.getItem('schoolStarterSubjects') || 'null');
 const legacyAccounts = JSON.parse(localStorage.getItem('schoolAccounts') || 'null');
-const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], adminNote: '', teacherTools: [], lastTimerSeconds: 300, teacherClasses: [], pickHistory: {}, ...a }));
+const normalizeAccounts = (list) => (list || []).map((a) => ({ role: 'student', childClasses: [], pending: false, graduated: false, authUids: [], notifReadIds: [], settings: null, personalLessons: [], adminNote: '', teacherTools: [], lastTimerSeconds: 300, teacherClasses: [], pickHistory: {}, pinnedClasses: [], ...a }));
 
 const STORE_KEYS = ['subjectsByClass', 'starterSubjectsByGrade', 'lessonsByClass', 'announcements', 'notifications', 'teacherClasses', 'seatLayouts'];
 const seedValue = {
@@ -1856,7 +1856,7 @@ function toolTileHtml(tool, editing) {
   return `<button type="button" class="relative min-h-[140px] rounded-[20px] border bg-card p-5 text-left shadow-[0_7px_22px_var(--shadow)] transition hover:-translate-y-1 hover:shadow-lg ${tool.pinned ? 'border-primary' : 'border-line'}" data-open-tool="${tool.id}">
     <span class="absolute right-3 top-3 z-10 flex gap-1.5">
       ${tileButton(`data-pin-tool="${tool.id}"`, tool.pinned ? 'Odepnij' : 'Przypnij', '📌', tool.pinned ? 'bg-primary text-white' : 'opacity-60')}
-      ${tileButton(`data-settings-tool="${tool.id}"`, 'Ustawienia narzędzia', '⚙')}
+      ${tool.type === 'seating' ? tileButton(`data-settings-tool="${tool.id}"`, 'Ustawienia rozsadzania', '⚙') : ''}
       ${editing ? tileButton(`data-delete-tool="${tool.id}"`, 'Usuń narzędzie', '🗑', 'text-red-600') : ''}
     </span>
     <span class="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-app text-xl">${info.icon}</span>
@@ -1924,7 +1924,9 @@ function renderToolSections(tools, editing) {
     + (rest.length || editing ? toolSectionTitle('Pozostałe narzędzia') : '')
     + rest.map((t) => toolTileHtml(t, editing)).join('');
 }
-// Per-tool settings dialog. Everything applies immediately (no save button to forget).
+// Settings dialog of the seating tool. They belong to the tool and hold for every class
+// (never for just the one class that happens to be selected). Everything applies
+// immediately (no save button to forget).
 const toolSettingsDialog = document.querySelector('#toolSettings');
 let settingsToolId = null;
 const settingsTool = () => teacherToolsFor().find((t) => t.id === settingsToolId);
@@ -1932,17 +1934,9 @@ function renderToolSettings() {
   const tool = settingsTool();
   if (!tool) { toolSettingsDialog.close(); return; }
   const info = toolTypeInfo(tool.type);
-  const classTool = ['picker', 'groups', 'seating'].includes(tool.type);
   document.querySelector('#toolSettingsType').textContent = `${info.icon} ${info.name}`;
   document.querySelector('#toolSettingsName').placeholder = info.name;
   if (document.activeElement !== document.querySelector('#toolSettingsName')) document.querySelector('#toolSettingsName').value = tool.label || '';
-  document.querySelector('#toolSettingsClassRow').classList.toggle('hidden', !classTool);
-  if (classTool) {
-    const select = document.querySelector('#toolSettingsClass');
-    select.innerHTML = `<option value="">— brak —</option>${teacherClasses().map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}`;
-    select.value = toolClass(tool)?.id || '';
-  }
-  document.querySelector('#toolSettingsManualRow').classList.toggle('hidden', tool.type !== 'seating');
   document.querySelector('#toolSettingsManual').checked = !!tool.manualRows;
   const pin = document.querySelector('#toolSettingsPin');
   pin.checked = !!tool.pinned;
@@ -1963,14 +1957,6 @@ document.querySelector('#toolSettingsName').addEventListener('change', (e) => {
   if (!tool) return;
   renameTool(tool, e.target.value);
   renderTeacherTools();
-});
-document.querySelector('#toolSettingsClass').addEventListener('change', (e) => {
-  const tool = settingsTool();
-  if (!tool) return;
-  tool.classId = e.target.value || null;
-  delete state.pickerResult[tool.id];
-  delete state.groupsResult[tool.id];
-  saveTeacherTools();
 });
 document.querySelector('#toolSettingsManual').addEventListener('change', (e) => {
   const tool = settingsTool();
@@ -2234,16 +2220,28 @@ function renderToolScreen() {
   else if (tool.type === 'seating') renderSeatingScreen();
   else renderGroupsScreen();
 }
+// Each teacher can pin up to MAX_PINNED_CLASSES classes (stored on their own account);
+// pinned classes are listed first in the class pickers.
+const MAX_PINNED_CLASSES = 5;
+const isClassPinned = (id) => (currentAccount()?.pinnedClasses || []).includes(id);
+const pinnedClassCount = () => teacherClasses().filter((c) => isClassPinned(c.id)).length;
 function renderClassBars() {
   const tool = activeClassTool();
-  const classes = teacherClasses();
+  const classes = [...teacherClasses().filter((c) => isClassPinned(c.id)), ...teacherClasses().filter((c) => !isClassPinned(c.id))];
   const cls = toolClass(tool);
   document.querySelectorAll('[data-class-bar]').forEach((bar) => {
     bar.querySelector('[data-class-select]').innerHTML =
       `<option value="">${classes.length ? 'Wybierz klasę…' : 'Brak klas — dodaj pierwszą (+)'}</option>` +
-      classes.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+      classes.map((c) => `<option value="${c.id}">${isClassPinned(c.id) ? '📌 ' : ''}${escapeHtml(c.name)}</option>`).join('');
     bar.querySelector('[data-class-select]').value = cls ? cls.id : '';
     bar.querySelector('[data-class-edit]').disabled = !cls;
+    const pin = bar.querySelector('[data-class-pin]');
+    pin.disabled = !cls;
+    const pinned = !!cls && isClassPinned(cls.id);
+    pin.classList.toggle('bg-primary', pinned);
+    pin.classList.toggle('text-white', pinned);
+    pin.classList.toggle('bg-app', !pinned);
+    pin.title = pin.ariaLabel = pinned ? 'Odepnij klasę' : 'Przypnij klasę';
     bar.querySelector('[data-class-summary]').textContent = cls
       ? `${studentsLabel(cls.students.length)}${cls.apart.length ? ` · reguł grup: ${cls.apart.length}` : ''}${cls.seatApart.length + cls.seatRows.length ? ` · reguł miejsc: ${cls.seatApart.length + cls.seatRows.length}` : ''}${cls.createdBy ? ` · dodał(a): ${cls.createdBy}` : ''}`
       : '';
@@ -2273,6 +2271,24 @@ document.querySelectorAll('[data-class-bar]').forEach((bar) => {
   bar.querySelector('[data-class-edit]').addEventListener('click', () => {
     const cls = toolClass(activeClassTool());
     if (cls) openClassEditor(cls.id);
+  });
+  bar.querySelector('[data-class-pin]').addEventListener('click', () => {
+    const cls = toolClass(activeClassTool());
+    const account = currentAccount();
+    if (!cls || !account) return;
+    const pinned = (account.pinnedClasses || []).filter((id) => teacherClasses().some((c) => c.id === id));
+    if (pinned.includes(cls.id)) {
+      account.pinnedClasses = pinned.filter((id) => id !== cls.id);
+    } else if (pinned.length >= MAX_PINNED_CLASSES) {
+      const summary = bar.querySelector('[data-class-summary]');
+      summary.textContent = `Możesz przypiąć maksymalnie ${MAX_PINNED_CLASSES} klas — najpierw odepnij którąś.`;
+      setTimeout(renderClassBars, 3500);
+      return;
+    } else {
+      account.pinnedClasses = [...pinned, cls.id];
+    }
+    saveTeacherTools();
+    renderClassBars();
   });
 });
 
