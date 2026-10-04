@@ -283,6 +283,11 @@
             <button class="rounded-xl bg-primary px-5 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="seatDraw">Losuj miejsca</button>
             <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-muted" id="seatClear">Wyczyść plan</button>
             <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-primary" id="seatEditToggle">Edytuj układ</button>
+            <label class="inline-flex cursor-pointer select-none items-center gap-2 rounded-xl bg-app px-3.5 py-2.5 text-sm font-bold text-ink" title="Wyłączone: numery rzędów liczone automatycznie z położenia stolików. Włączone: sam wpisujesz numer każdego stolika.">
+              <input class="peer sr-only" type="checkbox" id="seatManualToggle" />
+              <span class="relative h-5 w-9 shrink-0 rounded-full bg-line transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-4 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-primary"></span>
+              Własne numery
+            </label>
           </div>
         </div>
         <div class="mb-3 flex flex-wrap items-center gap-2">
@@ -302,6 +307,9 @@
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatRotR" title="Obróć w prawo" aria-label="Obróć w prawo">↻</button>
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-ink disabled:opacity-40" id="seatDup">Powiel</button>
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-red-600 disabled:opacity-40" id="seatDel">Usuń</button>
+          <label class="hidden items-center gap-1.5 text-sm font-bold text-ink" id="seatNumWrap">Numer rzędu
+            <input class="w-16 rounded-lg border border-line bg-app px-2 py-1 text-ink disabled:opacity-40" id="seatDeskNum" type="number" min="1" max="10" inputmode="numeric" placeholder="—" disabled />
+          </label>
           <button class="min-w-[8.75rem] rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-red-600 disabled:opacity-40" id="seatDelAll">Usuń wszystkie</button>
           <span class="mx-1 h-5 w-px bg-line"></span>
           <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-muted" id="seatDefault">Układ domyślny</button>
@@ -764,6 +772,6 @@
     </form>
   </div>
 
-  <script type="module" src="script.js?v=20261004c"></script>
+  <script type="module" src="script.js?v=20261004d"></script>
 </body>
 </html>

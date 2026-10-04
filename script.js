@@ -2580,15 +2580,24 @@ function defaultDesks() {
   }
   return desks;
 }
-function deskRows(desks) {
+// Row numbers come from the desks' positions (the default), or — with the "Własne numery"
+// switch on (tool.manualRows) — from the number typed into each desk (desk.num, 1-10);
+// desks without a number then belong to no row (0) and never match a row rule. Desks that
+// share a number are one row, wherever they stand.
+function deskRows(desks, manual = false) {
   const rowOf = {};
-  let row = 0;
-  let anchor = null;
-  [...desks].sort((a, b) => a.y - b.y).forEach((d) => {
-    if (anchor === null || d.y - anchor > ROW_TOLERANCE) { row++; anchor = d.y; }
-    rowOf[d.id] = row;
-  });
-  return { rowOf, rowCount: row };
+  if (manual) {
+    desks.forEach((d) => { rowOf[d.id] = d.num || 0; });
+  } else {
+    let row = 0;
+    let anchor = null;
+    [...desks].sort((a, b) => a.y - b.y).forEach((d) => {
+      if (anchor === null || d.y - anchor > ROW_TOLERANCE) { row++; anchor = d.y; }
+      rowOf[d.id] = row;
+    });
+  }
+  const rows = new Set(Object.values(rowOf).filter(Boolean));
+  return { rowOf, rows, rowCount: rows.size };
 }
 const deskDistance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const seatName = (name) => {
@@ -2600,8 +2609,8 @@ const seatName = (name) => {
 // (row rules shrink a person's choice of desks, "not next to" pairs add conflicts), each
 // goes to a random free desk in an allowed row with none of their partners on a
 // neighboring desk. Returns { deskId: name }, or null if the rules can't all be met.
-function seatStudents(students, desks, seatRows, seatApart) {
-  const { rowOf } = deskRows(desks);
+function seatStudents(students, desks, seatRows, seatApart, manual = false) {
+  const { rowOf } = deskRows(desks, manual);
   const allowed = new Map();
   seatRows.forEach(({ name, row }) => { allowed.set(name, (allowed.get(name) || new Set()).add(row)); });
   const partners = new Map(students.map((s) => [s, new Set()]));
@@ -2656,12 +2665,12 @@ function renderSeatBoard(animate = false) {
   if (!tool) return;
   const cls = toolClass(tool);
   const plan = seatPlanFor(tool, cls);
-  const { rowOf } = deskRows(tool.desks);
+  const { rowOf } = deskRows(tool.desks, tool.manualRows);
   const seated = (d) => (plan[d.id] && cls?.students.includes(plan[d.id]) ? plan[d.id] : null);
   seatBoardEl.innerHTML = '<div class="seat-front">TABLICA</div>' + tool.desks.map((d) => {
     const name = seated(d);
     const selected = state.seatEditing && state.selectedDesk === d.id;
-    const label = name ? (animate ? '' : escapeHtml(seatName(name))) : `<span class="seat-row-no">${rowOf[d.id]}</span>`;
+    const label = name ? (animate ? '' : escapeHtml(seatName(name))) : `<span class="seat-row-no">${rowOf[d.id] || ''}</span>`;
     return `<div class="seat-desk${name ? ' filled' : ''}${selected ? ' selected' : ''}${state.seatEditing ? ' editable' : ''}" data-desk="${d.id}" style="left:${d.x}%;top:${(d.y / BOARD_H) * 100}%;width:${DESK_W}%;height:${(DESK_H / BOARD_H) * 100}%">
       <svg class="seat-shape" viewBox="0 0 74 68" preserveAspectRatio="none" style="transform:rotate(${d.angle || 0}deg)"><path d="${DESK_PATH}"/></svg>
       <span class="seat-label"><span class="seat-name">${label}</span></span>
@@ -2682,8 +2691,10 @@ function renderSeatingScreen() {
   document.querySelector('#seatDelAll').disabled = !tool.desks.length;
   ['#seatRotL', '#seatRotR', '#seatDup', '#seatDel'].forEach((sel) => { document.querySelector(sel).disabled = !state.selectedDesk; });
   document.querySelector('#seatClear').disabled = !cls || !Object.keys(seatPlanFor(tool, cls)).length;
-  const { rowCount } = deskRows(tool.desks);
-  const info = [`Stolików: ${tool.desks.length}`, `rzędów: ${rowCount}`];
+  const { rowCount } = deskRows(tool.desks, tool.manualRows);
+  const info = [`Stolików: ${tool.desks.length}`, `rzędów: ${rowCount}${tool.manualRows ? ' (własne numery)' : ''}`];
+  document.querySelector('#seatManualToggle').checked = !!tool.manualRows;
+  renderSeatNumField();
   if (cls) info.push(`uczniów: ${cls.students.length}`);
   if (cls?.seatApart.length) info.push(`„nie obok”: ${cls.seatApart.length}`);
   if (cls?.seatRows.length) info.push(`reguł rzędów: ${cls.seatRows.length}`);
@@ -2704,7 +2715,7 @@ function openSeatingScreen(id) {
 // Each seated desk flickers through a few random names, then the real one drops in with
 // the bounce — desks start a little after one another, front rows first.
 function animateSeating(tool, plan) {
-  const { rowOf } = deskRows(tool.desks);
+  const { rowOf } = deskRows(tool.desks, tool.manualRows);
   const filled = tool.desks.filter((d) => plan[d.id]).sort((a, b) => rowOf[a.id] - rowOf[b.id] || a.x - b.x);
   const pool = Object.values(plan);
   const stagger = Math.min(50, Math.floor(1300 / Math.max(1, filled.length - 1)));
@@ -2732,10 +2743,10 @@ async function drawSeating() {
   if (!cls) return fail('Wybierz klasę albo dodaj nową (+).');
   if (!cls.students.length) return fail('Ta klasa nie ma jeszcze uczniów — kliknij ✎ i wpisz listę.');
   if (tool.desks.length < cls.students.length) return fail(`Za mało stolików: ${cls.students.length} uczniów, ${tool.desks.length} stolików — dodaj stoliki w układzie.`);
-  const { rowCount } = deskRows(tool.desks);
-  const missingRow = cls.seatRows.find(({ row }) => row > rowCount);
-  if (missingRow) return fail(`Reguła „${missingRow.name} → rząd ${missingRow.row}” nie pasuje do układu — liczba rzędów stolików: ${rowCount}.`);
-  const plan = seatStudents(cls.students, tool.desks, cls.seatRows, cls.seatApart);
+  const { rows, rowCount } = deskRows(tool.desks, tool.manualRows);
+  const missingRow = cls.seatRows.find(({ row }) => !rows.has(row));
+  if (missingRow) return fail(`Reguła „${missingRow.name} → rząd ${missingRow.row}” nie pasuje do układu — ${tool.manualRows ? `żaden stolik nie ma numeru ${missingRow.row}` : `liczba rzędów stolików: ${rowCount}`}.`);
+  const plan = seatStudents(cls.students, tool.desks, cls.seatRows, cls.seatApart, !!tool.manualRows);
   if (!plan) return fail('Nie da się rozsadzić klasy z tymi regułami — usuń część reguł „nie obok” lub rzędów albo zmień układ stolików.');
   error.classList.add('hidden');
   (tool.seatPlans || (tool.seatPlans = {}))[cls.id] = plan;
@@ -2788,7 +2799,8 @@ document.querySelector('#seatAddRow').addEventListener('click', () => {
   if (!tool) return;
   const lowest = tool.desks.length ? Math.max(...tool.desks.map((d) => d.y)) : null;
   const y = lowest === null ? 15 : Math.min(lowest + 11.5, BOARD_H - DESK_H / 2);
-  for (let c = 0; c < 6; c++) tool.desks.push({ id: crypto.randomUUID(), x: 12.5 + c * 15, y, angle: 0 });
+  const num = tool.manualRows ? Math.min(SEAT_ROW_MAX, Math.max(0, ...tool.desks.map((d) => d.num || 0)) + 1) : undefined;
+  for (let c = 0; c < 6; c++) tool.desks.push({ id: crypto.randomUUID(), x: 12.5 + c * 15, y, angle: 0, ...(num ? { num } : {}) });
   seatLayoutChanged();
 });
 [['#seatRotL', -15], ['#seatRotR', 15]].forEach(([sel, delta]) => document.querySelector(sel).addEventListener('click', () => {
@@ -2801,7 +2813,7 @@ document.querySelector('#seatDup').addEventListener('click', () => {
   const tool = seatTool();
   const desk = selectedDesk();
   if (!tool || !desk) return;
-  const copy = { id: crypto.randomUUID(), x: clamp(desk.x + 4, DESK_W / 2, 100 - DESK_W / 2), y: clamp(desk.y + 4, DESK_MIN_Y, BOARD_H - DESK_H / 2), angle: desk.angle || 0 };
+  const copy = { id: crypto.randomUUID(), x: clamp(desk.x + 4, DESK_W / 2, 100 - DESK_W / 2), y: clamp(desk.y + 4, DESK_MIN_Y, BOARD_H - DESK_H / 2), angle: desk.angle || 0, ...(desk.num ? { num: desk.num } : {}) };
   tool.desks.push(copy);
   state.selectedDesk = copy.id;
   seatLayoutChanged();
@@ -2843,6 +2855,42 @@ document.addEventListener('keydown', (e) => {
   removeDesk(state.selectedDesk);
 });
 
+// -- Row numbering: automatic (from positions) or typed in per desk --
+document.querySelector('#seatManualToggle').addEventListener('change', (e) => {
+  const tool = seatTool();
+  if (!tool) return;
+  if (e.target.checked) {
+    // Start from the numbers the automatic system currently shows, so nothing jumps.
+    const { rowOf } = deskRows(tool.desks, false);
+    tool.desks.forEach((d) => { if (!d.num) d.num = Math.min(SEAT_ROW_MAX, rowOf[d.id]); });
+  }
+  tool.manualRows = e.target.checked;
+  seatLayoutChanged();
+});
+function renderSeatNumField() {
+  const tool = seatTool();
+  const wrap = document.querySelector('#seatNumWrap');
+  const input = document.querySelector('#seatDeskNum');
+  const manual = !!tool?.manualRows;
+  wrap.classList.toggle('hidden', !manual);
+  wrap.classList.toggle('flex', manual);
+  const desk = selectedDesk();
+  input.disabled = !desk;
+  if (document.activeElement !== input) input.value = desk?.num || '';
+}
+document.querySelector('#seatDeskNum').addEventListener('input', (e) => {
+  const desk = selectedDesk();
+  if (!desk) return;
+  const n = parseInt(e.target.value, 10);
+  if (Number.isNaN(n)) delete desk.num;
+  else desk.num = clamp(n, 1, SEAT_ROW_MAX);
+  saveTeacherTools();
+  renderSeatBoard();
+  const { rowCount } = deskRows(seatTool().desks, true);
+  document.querySelector('#seatInfo').textContent = document.querySelector('#seatInfo').textContent.replace(/rzędów: \d+/, `rzędów: ${rowCount}`);
+});
+document.querySelector('#seatDeskNum').addEventListener('change', (e) => { e.target.value = selectedDesk()?.num || ''; });
+
 // -- Shared layouts --
 function renderSeatLayoutBar() {
   const select = document.querySelector('#seatLayoutSelect');
@@ -2865,7 +2913,8 @@ document.querySelector('#seatLayoutUse').addEventListener('click', () => {
   const layout = seatLayouts().find((l) => l.id === state.seatLayoutId);
   if (!tool || !layout) return;
   if (!confirm(`Użyć schematu „${layout.name}”? Obecny układ stolików i zapisane plany rozsadzenia w tym narzędziu zostaną zastąpione.`)) return;
-  tool.desks = layout.desks.map((d) => ({ id: crypto.randomUUID(), x: d.x, y: d.y, angle: d.angle || 0 }));
+  tool.desks = layout.desks.map((d) => ({ id: crypto.randomUUID(), x: d.x, y: d.y, angle: d.angle || 0, ...(d.num ? { num: d.num } : {}) }));
+  tool.manualRows = !!layout.manual;
   tool.seatPlans = {};
   state.selectedDesk = null;
   seatLayoutChanged();
@@ -2886,7 +2935,8 @@ document.querySelector('#seatLayoutSave').addEventListener('click', async () => 
     id: same?.id || crypto.randomUUID(),
     name,
     createdBy: same?.createdBy || currentUser?.name || '',
-    desks: tool.desks.map((d) => ({ x: Math.round(d.x * 100) / 100, y: Math.round(d.y * 100) / 100, angle: d.angle || 0 })),
+    manual: !!tool.manualRows,
+    desks: tool.desks.map((d) => ({ x: Math.round(d.x * 100) / 100, y: Math.round(d.y * 100) / 100, angle: d.angle || 0, ...(d.num ? { num: d.num } : {}) })),
   };
   state.seatLayouts = same ? seatLayouts().map((l) => (l.id === layout.id ? layout : l)) : [...seatLayouts(), layout];
   state.seatLayoutId = layout.id;
@@ -2904,6 +2954,7 @@ document.querySelector('#seatDefault').addEventListener('click', () => {
   const tool = seatTool();
   if (!tool || !confirm('Przywrócić domyślny układ stolików? Obecny układ i zapisane plany rozsadzenia zostaną zastąpione.')) return;
   tool.desks = defaultDesks();
+  tool.manualRows = false;
   tool.seatPlans = {};
   state.selectedDesk = null;
   seatLayoutChanged();
