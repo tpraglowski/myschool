@@ -1938,6 +1938,7 @@ function renderToolSettings() {
   document.querySelector('#toolSettingsName').placeholder = info.name;
   if (document.activeElement !== document.querySelector('#toolSettingsName')) document.querySelector('#toolSettingsName').value = tool.label || '';
   document.querySelector('#toolSettingsManual').checked = !!tool.manualRows;
+  document.querySelectorAll('input[name="seatDrawMode"]').forEach((r) => { r.checked = r.value === (tool.drawMode || 'random'); });
   const pin = document.querySelector('#toolSettingsPin');
   pin.checked = !!tool.pinned;
   const full = !tool.pinned && pinnedCount() >= MAX_PINNED_TOOLS;
@@ -1958,6 +1959,12 @@ document.querySelector('#toolSettingsName').addEventListener('change', (e) => {
   renameTool(tool, e.target.value);
   renderTeacherTools();
 });
+document.querySelectorAll('input[name="seatDrawMode"]').forEach((radio) => radio.addEventListener('change', () => {
+  const tool = settingsTool();
+  if (!tool || !radio.checked) return;
+  tool.drawMode = radio.value;
+  saveTeacherTools();
+}));
 document.querySelector('#toolSettingsManual').addEventListener('change', (e) => {
   const tool = settingsTool();
   if (!tool) return;
@@ -2730,7 +2737,37 @@ const seatName = (name) => {
 // (row rules shrink a person's choice of desks, "not next to" pairs add conflicts), each
 // goes to a random free desk in an allowed row with none of their partners on a
 // neighboring desk. Returns { deskId: name }, or null if the rules can't all be met.
-function seatStudents(students, desks, seatRows, seatApart, manual = false) {
+// Draw modes (settings of the seating tool): 'random' (anything goes), 'minTwo' (no row is
+// left with a single person: every used row holds at least 2) and 'front' (desks are tried
+// front row first, so the class fills the room from the board backwards).
+const SEAT_MODES = [
+  { mode: 'random', name: 'Całkowicie losowo', description: 'Każdy może usiąść przy dowolnym stoliku.' },
+  { mode: 'minTwo', name: 'Minimum 2 osoby w rzędzie', description: 'Żaden rząd nie zostaje z jedną osobą (rząd jest pusty albo ma co najmniej 2).' },
+  { mode: 'front', name: 'Od przodu do tyłu', description: 'Najpierw zapełniane są stoliki z przodu (przy tablicy), potem kolejne rzędy.' },
+];
+// minTwo: decide up front how many people each row gets (0, or 2..its desks), preferring
+// rows the row rules need, then let the usual search seat people within those quotas.
+function seatQuotas(rowOf, desks, n, forcedRows) {
+  const need = Math.min(2, n);
+  const capacity = new Map();
+  desks.forEach((d) => capacity.set(rowOf[d.id], (capacity.get(rowOf[d.id]) || 0) + 1));
+  const usable = [...capacity.keys()].filter((r) => capacity.get(r) >= need);
+  let active = fastShuffled(forcedRows.filter((r, i) => usable.includes(r) && forcedRows.indexOf(r) === i));
+  while (active.length * need > n) active.pop();
+  let room = active.reduce((sum, r) => sum + capacity.get(r), 0);
+  fastShuffled(usable.filter((r) => !active.includes(r))).forEach((r) => {
+    if (room < n || (Math.random() < 0.4 && need * (active.length + 1) <= n)) { active.push(r); room += capacity.get(r); }
+  });
+  if (room < n) return null;
+  const quota = new Map(active.map((r) => [r, need]));
+  for (let left = n - need * active.length; left > 0; left--) {
+    const open = active.filter((r) => quota.get(r) < capacity.get(r));
+    const r = open[Math.floor(Math.random() * open.length)];
+    quota.set(r, quota.get(r) + 1);
+  }
+  return quota;
+}
+function seatStudents(students, desks, seatRows, seatApart, manual = false, mode = 'random') {
   const { rowOf } = deskRows(desks, manual);
   const allowed = new Map();
   seatRows.forEach(({ name, row }) => { allowed.set(name, (allowed.get(name) || new Set()).add(row)); });
@@ -2741,6 +2778,9 @@ function seatStudents(students, desks, seatRows, seatApart, manual = false) {
   const deadline = performance.now() + SOLVER_BUDGET_MS;
   let timedOut = false;
   for (let attempt = 0; attempt < 40 && !timedOut; attempt++) {
+    const quota = mode === 'minTwo' ? seatQuotas(rowOf, desks, students.length, seatRows.map((r) => r.row)) : null;
+    if (mode === 'minTwo' && !quota) return null;
+    const used = new Map();
     const order = fastShuffled(students).sort((a, b) => choices(a) - choices(b) || partners.get(b).size - partners.get(a).size);
     const seatOf = new Map();
     let steps = 0;
@@ -2749,12 +2789,16 @@ function seatStudents(students, desks, seatRows, seatApart, manual = false) {
       if ((++steps & 255) === 0 && performance.now() > deadline) timedOut = true;
       if (timedOut || steps > 20000) return false;
       const s = order[i];
-      for (const d of fastShuffled(desks)) {
+      const tryOrder = mode === 'front' ? fastShuffled(desks).sort((a, b) => (rowOf[a.id] || 99) - (rowOf[b.id] || 99)) : fastShuffled(desks);
+      for (const d of tryOrder) {
         if (seatOf.has(d.id)) continue;
         if (allowed.has(s) && !allowed.get(s).has(rowOf[d.id])) continue;
+        if (quota && (used.get(rowOf[d.id]) || 0) >= (quota.get(rowOf[d.id]) || 0)) continue;
         if (near.get(d.id).some((id) => partners.get(s).has(seatOf.get(id)))) continue;
         seatOf.set(d.id, s);
+        used.set(rowOf[d.id], (used.get(rowOf[d.id]) || 0) + 1);
         if (place(i + 1)) return true;
+        used.set(rowOf[d.id], used.get(rowOf[d.id]) - 1);
         seatOf.delete(d.id);
       }
       return false;
@@ -2817,6 +2861,7 @@ function renderSeatingScreen() {
   document.querySelector('#seatManualToggle').checked = !!tool.manualRows;
   renderSeatNumField();
   if (cls) info.push(`uczniów: ${cls.students.length}`);
+  if (tool.drawMode && tool.drawMode !== 'random') info.push(`losowanie: ${SEAT_MODES.find((m) => m.mode === tool.drawMode)?.name.toLocaleLowerCase('pl-PL')}`);
   if (cls?.seatApart.length) info.push(`„nie obok”: ${cls.seatApart.length}`);
   if (cls?.seatRows.length) info.push(`reguł rzędów: ${cls.seatRows.length}`);
   document.querySelector('#seatInfo').textContent = cls ? info.join(' · ') : `${info.join(' · ')} — wybierz klasę albo dodaj nową (+).`;
@@ -2867,8 +2912,8 @@ async function drawSeating() {
   const { rows, rowCount } = deskRows(tool.desks, tool.manualRows);
   const missingRow = cls.seatRows.find(({ row }) => !rows.has(row));
   if (missingRow) return fail(`Reguła „${missingRow.name} → rząd ${missingRow.row}” nie pasuje do układu — ${tool.manualRows ? `żaden stolik nie ma numeru ${missingRow.row}` : `liczba rzędów stolików: ${rowCount}`}.`);
-  const plan = seatStudents(cls.students, tool.desks, cls.seatRows, cls.seatApart, !!tool.manualRows);
-  if (!plan) return fail('Nie da się rozsadzić klasy z tymi regułami — usuń część reguł „nie obok” lub rzędów albo zmień układ stolików.');
+  const plan = seatStudents(cls.students, tool.desks, cls.seatRows, cls.seatApart, !!tool.manualRows, tool.drawMode || 'random');
+  if (!plan) return fail(`Nie da się rozsadzić klasy z tymi regułami${tool.drawMode === 'minTwo' ? ' i warunkiem „minimum 2 osoby w rzędzie”' : ''} — usuń część reguł „nie obok” lub rzędów, zmień sposób losowania w ⚙ albo zmień układ stolików.`);
   error.classList.add('hidden');
   (tool.seatPlans || (tool.seatPlans = {}))[cls.id] = plan;
   saveTeacherTools();

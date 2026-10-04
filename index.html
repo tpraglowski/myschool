@@ -706,6 +706,32 @@
       <p class="mb-4 text-sm text-muted"><span id="toolSettingsType"></span> · dla wszystkich klas</p>
       <label class="mb-1 block text-sm font-bold" for="toolSettingsName">Nazwa</label>
       <input class="w-full rounded-[11px] border border-line bg-app px-3 py-2.5 text-ink outline-primary" id="toolSettingsName" maxlength="40" autocomplete="off" />
+      <fieldset class="mt-4">
+        <legend class="mb-1.5 text-sm font-bold">Sposób losowania</legend>
+        <div class="grid gap-2">
+        <label class="block cursor-pointer">
+          <input class="peer sr-only" type="radio" name="seatDrawMode" value="random" checked />
+          <span class="flex items-start gap-3 rounded-xl border border-line bg-app px-3 py-2.5 peer-checked:border-primary peer-checked:bg-[#4f46e51a] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-primary">
+            <b class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-card text-sm">1</b>
+            <span><b class="block text-sm">Całkowicie losowo</b><span class="text-xs text-muted">Każdy może usiąść przy dowolnym stoliku.</span></span>
+          </span>
+        </label>
+        <label class="block cursor-pointer">
+          <input class="peer sr-only" type="radio" name="seatDrawMode" value="minTwo" />
+          <span class="flex items-start gap-3 rounded-xl border border-line bg-app px-3 py-2.5 peer-checked:border-primary peer-checked:bg-[#4f46e51a] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-primary">
+            <b class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-card text-sm">2</b>
+            <span><b class="block text-sm">Minimum 2 osoby w rzędzie</b><span class="text-xs text-muted">Żaden rząd nie zostaje z jedną osobą.</span></span>
+          </span>
+        </label>
+        <label class="block cursor-pointer">
+          <input class="peer sr-only" type="radio" name="seatDrawMode" value="front" />
+          <span class="flex items-start gap-3 rounded-xl border border-line bg-app px-3 py-2.5 peer-checked:border-primary peer-checked:bg-[#4f46e51a] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-primary">
+            <b class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-card text-sm">3</b>
+            <span><b class="block text-sm">Od przodu do tyłu</b><span class="text-xs text-muted">Najpierw stoliki z przodu, potem dalsze rzędy.</span></span>
+          </span>
+        </label>
+        </div>
+      </fieldset>
       <label class="mt-4 flex cursor-pointer select-none items-center gap-3 text-sm font-bold" id="toolSettingsManualRow">
         <input class="peer sr-only" type="checkbox" id="toolSettingsManual" />
         <span class="relative h-5 w-9 shrink-0 rounded-full bg-line transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-4"></span>
@@ -800,6 +826,6 @@
     </form>
   </div>
 
-  <script type="module" src="script.js?v=20261004g"></script>
+  <script type="module" src="script.js?v=20261004h"></script>
 </body>
 </html>
