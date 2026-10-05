@@ -399,6 +399,76 @@ function seedClassSubjectsFromStarter(cls) {
   saveSubjectsByClass();
 }
 
+// ---- Starter package changes also reach classes that already exist ----
+// Class subjects are copies of the starter package made when a class got its first account,
+// with fresh ids, so the link between a package entry and a class copy is its NAME. Each
+// admin edit of the package (add/delete a subject, add/delete a competence) is therefore
+// repeated in every existing class of that grade, matching by name:
+//  - additions are skipped where the class already has that subject/competence (even one a
+//    student made themselves);
+//  - deletions never touch what a student made themselves (addedBy: student).
+// Returns the class codes that were changed.
+const sameName = (a, b) => a.trim().toLocaleLowerCase('pl-PL') === b.trim().toLocaleLowerCase('pl-PL');
+const existingClassesOfGrade = (grade) => Object.keys(state.subjectsByClass).filter((code) => gradeOfClass(code) === grade);
+function propagateStarterChange(grade, change) {
+  const changed = [];
+  existingClassesOfGrade(grade).forEach((code) => {
+    const subjects = subjectsForClass(code);
+    const subject = (name) => subjects.find((x) => sameName(x.name, name));
+    let touched = false;
+    if (change.type === 'addSubject') {
+      if (!subject(change.name)) {
+        subjects.push({
+          id: crypto.randomUUID(), name: change.name, gradient: change.gradient, addedBy: 'admin',
+          competences: (change.competences || []).map((c) => ({ id: crypto.randomUUID(), name: c.name, addedBy: 'admin' })),
+        });
+        touched = true;
+      }
+    } else if (change.type === 'addCompetence') {
+      let target = subject(change.subject.name);
+      if (!target) {
+        target = { id: crypto.randomUUID(), name: change.subject.name, gradient: change.subject.gradient, addedBy: 'admin', competences: [] };
+        subjects.push(target);
+        touched = true;
+      }
+      if (!target.competences.some((c) => sameName(c.name, change.name))) {
+        target.competences.push({ id: crypto.randomUUID(), name: change.name, addedBy: 'admin' });
+        touched = true;
+      }
+    } else if (change.type === 'deleteSubject') {
+      const before = subjects.length;
+      state.subjectsByClass[code] = subjects.filter((x) => !(sameName(x.name, change.name) && x.addedBy !== 'student'));
+      touched = state.subjectsByClass[code].length !== before;
+    } else if (change.type === 'deleteCompetence') {
+      const target = subject(change.subject);
+      if (target) {
+        const before = target.competences.length;
+        target.competences = target.competences.filter((c) => !(sameName(c.name, change.name) && c.addedBy !== 'student'));
+        touched = target.competences.length !== before;
+      }
+    }
+    if (touched) changed.push(code);
+  });
+  if (changed.length) {
+    saveSubjectsByClass();
+    renderSubjects();
+    if (!document.querySelector('#detail').classList.contains('hidden')) renderCompetences();
+  }
+  showStarterSyncNote(changed);
+  return changed;
+}
+let starterNoteTimer = null;
+function showStarterSyncNote(changed) {
+  const note = document.querySelector('#starterSyncNote');
+  if (!note) return;
+  note.textContent = changed.length
+    ? `Zmiana zastosowana także w istniejących klasach: ${changed.join(', ')}.`
+    : 'Zmiana zapisana w pakiecie; w istniejących klasach tego rocznika nic nie trzeba było zmieniać.';
+  note.classList.remove('hidden');
+  clearTimeout(starterNoteTimer);
+  starterNoteTimer = setTimeout(() => note.classList.add('hidden'), 6000);
+}
+
 const escapeHtml = (s) => s.replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
 const capitalize = (s) => (s ? `${s.charAt(0).toLocaleUpperCase('pl-PL')}${s.slice(1)}` : s);
 const minutes = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
@@ -805,9 +875,12 @@ dialog.addEventListener('close', () => {
     item.gradient = state.chosenGradient;
     item.competences = [];
     subjects.push(item);
+    if (isTemplate) propagateStarterChange(state.adminStarterGrade, { type: 'addSubject', name: item.name, gradient: item.gradient, competences: [] });
   } else {
     const activeId = isTemplate ? state.activeTemplateSubject : state.activeSubject;
-    subjects.find((x) => x.id === activeId).competences.push(item);
+    const parent = subjects.find((x) => x.id === activeId);
+    parent.competences.push(item);
+    if (isTemplate) propagateStarterChange(state.adminStarterGrade, { type: 'addCompetence', subject: { name: parent.name, gradient: parent.gradient }, name: item.name });
   }
   if (isTemplate) {
     saveStarterSubjectsByGrade();
@@ -1288,15 +1361,19 @@ function renderStarterSubjects() {
     openEditor('competence', null, 'template');
   }));
   el.querySelectorAll('[data-delete-starter-subject]').forEach((b) => b.addEventListener('click', () => {
-    if (!confirm('Usunąć ten przedmiot z pakietu startowego?')) return;
+    const doomed = subjects.find((s) => s.id === b.dataset.deleteStarterSubject);
+    if (!doomed || !confirm(`Usunąć przedmiot „${doomed.name}” z pakietu startowego ORAZ z istniejących klas ${state.adminStarterGrade}? Uczniowie stracą w nim postęp kompetencji (przedmioty dodane przez samych uczniów zostają).`)) return;
+    propagateStarterChange(state.adminStarterGrade, { type: 'deleteSubject', name: doomed.name });
     state.starterSubjectsByGrade[state.adminStarterGrade] = subjects.filter((s) => s.id !== b.dataset.deleteStarterSubject);
     saveStarterSubjectsByGrade();
     renderStarterSubjects();
   }));
   el.querySelectorAll('[data-delete-starter-competence]').forEach((b) => b.addEventListener('click', () => {
-    if (!confirm('Usunąć tę kompetencję z pakietu startowego?')) return;
     const [subjectId, competenceId] = b.dataset.deleteStarterCompetence.split('|');
     const subject = subjects.find((s) => s.id === subjectId);
+    const doomed = subject?.competences.find((c) => c.id === competenceId);
+    if (!doomed || !confirm(`Usunąć kompetencję „${doomed.name}” z pakietu startowego ORAZ z istniejących klas ${state.adminStarterGrade}? Uczniowie stracą jej status.`)) return;
+    propagateStarterChange(state.adminStarterGrade, { type: 'deleteCompetence', subject: subject.name, name: doomed.name });
     subject.competences = subject.competences.filter((c) => c.id !== competenceId);
     saveStarterSubjectsByGrade();
     renderStarterSubjects();

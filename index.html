@@ -25,7 +25,7 @@
       },
     };
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261005g" />
+  <link rel="stylesheet" href="styles.css?v=20261005h" />
 </head>
 <body class="min-h-screen bg-app font-sans text-ink transition-colors">
   <main class="mx-auto w-[calc(100%-2rem)] max-w-[1120px] pb-11 pt-7">
@@ -474,10 +474,11 @@
       </div>
       <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
         <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3">
-          <div><h2 class="text-[1.2em] font-bold tracking-tight">Pakiet startowych kompetencji</h2><p class="text-sm text-muted">Trafia automatycznie do klasy przy jej pierwszym koncie.</p></div>
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Pakiet startowych kompetencji</h2><p class="text-sm text-muted">Trafia do klasy przy jej pierwszym koncie, a każda zmiana tutaj (dodanie lub usunięcie przedmiotu albo kompetencji) działa też w już istniejących klasach tego rocznika.</p></div>
           <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addStarterSubject">+ Dodaj przedmiot</button>
         </div>
         <div class="mb-[17px] flex flex-wrap gap-1.5" id="starterGradeTabs"></div>
+        <p class="mb-3 hidden rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-900" id="starterSyncNote"></p>
         <div class="grid gap-3" id="starterSubjectList"></div>
       </div>
     </section>
@@ -850,6 +851,6 @@
   </div>
 
   <canvas class="pointer-events-none fixed inset-0 z-[12] hidden h-full w-full" id="seasonCanvas" aria-hidden="true"></canvas>
-  <script type="module" src="script.js?v=20261005g"></script>
+  <script type="module" src="script.js?v=20261005h"></script>
 </body>
 </html>
