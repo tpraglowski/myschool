@@ -433,7 +433,7 @@ function show(id) {
     pill.style.height = activeBtn.offsetHeight + 'px';
   }
   updateToolsNav(id);
-  if (id !== 'seatingScreen') setSeatFull(false);
+  if (id !== 'seatingScreen') leaveSeatFullscreen();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 window.show = show;
@@ -2715,7 +2715,9 @@ function applyToolLayout(screenId, tool) {
     const tool = activeClassTool();
     if (!tool) return;
     tool.simpleView = b.dataset.layout === 'simple';
-    if (tool.simpleView && screenId === 'seatingScreen') { state.seatEditing = false; state.selectedDesk = null; }
+    if (screenId === 'seatingScreen') {
+      if (tool.simpleView) { state.seatEditing = false; state.selectedDesk = null; enterSeatFullscreen(); } else leaveSeatFullscreen();
+    }
     saveTeacherTools();
     renderToolScreen();
   }));
@@ -3070,7 +3072,7 @@ function seatFontSize(name) {
 function fitSeatBoard() {
   const screen = document.querySelector('#seatingScreen');
   const wrap = seatBoardEl.parentElement;
-  const overlay = seatFull || screen.classList.contains('layout-simple'); // both cover the whole window
+  const overlay = screen.classList.contains('layout-simple'); // the simple view covers the whole window
   if (!overlay || screen.classList.contains('hidden')) { seatBoardEl.style.width = ''; wrap.style.overflowX = ''; return; }
   const top = wrap.getBoundingClientRect().top + screen.scrollTop;
   const cardPad = parseFloat(getComputedStyle(screen.querySelector(':scope > div')).paddingBottom) || 0;
@@ -3080,38 +3082,16 @@ function fitSeatBoard() {
   wrap.style.overflowX = 'hidden'; // the board is sized to fit, so no scrollbar
 }
 window.addEventListener('resize', fitSeatBoard);
-// "Pełny ekran": the seating screen covers the whole window (a fixed overlay, so it works on
-// every device, phones included) and, where the browser allows it, also goes into real
-// full screen (hides the browser's own bars). Esc / the same button leave.
-let seatFull = false;
-let seatRealFullscreen = false;
-const seatFullscreenButton = document.querySelector('#seatFullscreen');
-function renderSeatFullscreenButton() {
-  seatFullscreenButton.innerHTML = `${icon(seatFull ? 'shrink' : 'expand')} ${seatFull ? 'Zamknij pełny ekran' : 'Pełny ekran'}`;
+// The simple view of the seating tool is a full-window overlay, and choosing it also asks the
+// browser for real full screen (hiding its own bars) where that's allowed. Choosing "Pełny"
+// — or leaving the tool — ends real full screen again. Esc leaves real full screen only.
+function enterSeatFullscreen() {
+  document.querySelector('#seatingScreen').requestFullscreen?.().catch(() => { /* the overlay alone is fine */ });
 }
-function setSeatFull(on) {
-  if (seatFull === on) return;
-  seatFull = on;
-  const screen = document.querySelector('#seatingScreen');
-  screen.classList.toggle('seat-full', on);
-  if (on) {
-    screen.scrollTop = 0;
-    screen.requestFullscreen?.().then(() => { seatRealFullscreen = true; }).catch(() => { /* the overlay alone is fine */ });
-  } else {
-    seatRealFullscreen = false;
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  }
-  renderSeatFullscreenButton();
-  fitSeatBoard();
+function leaveSeatFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 }
-renderSeatFullscreenButton();
-seatFullscreenButton.addEventListener('click', () => setSeatFull(!seatFull));
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && seatFull && !document.fullscreenElement) setSeatFull(false); });
-// Esc in real full screen is handled by the browser: close the overlay with it.
-document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement && seatRealFullscreen) setSeatFull(false);
-  fitSeatBoard();
-});
+document.addEventListener('fullscreenchange', fitSeatBoard);
 const seatTool = () => activeClassTool();
 const seatPlanFor = (tool, cls) => (cls && tool.seatPlans?.[cls.id]) || {};
 function renderSeatBoard(animate = false) {
@@ -3169,6 +3149,7 @@ function openSeatingScreen(id) {
   renderSeatingScreen();
   show('seatingScreen');
   fitSeatBoard(); // the screen is only measurable once it is visible
+  if (tool?.simpleView) enterSeatFullscreen(); // opening the tile was a click, so the browser allows it
 }
 
 // Each seated desk flickers through a few random names, then the real one drops in with
@@ -3200,7 +3181,7 @@ async function drawSeating() {
   const error = document.querySelector('#seatError');
   const fail = (message) => { error.textContent = message; error.classList.remove('hidden'); fitSeatBoard(); };
   if (!cls) return fail(tool.simpleView ? 'Wybierz klasę z listy.' : 'Wybierz klasę albo dodaj nową (+).');
-  const fullHint = tool.simpleView ? ' Zmień widok na „Pełny” w ⚙ ustawieniach narzędzia (Teacher Tools).' : '';
+  const fullHint = tool.simpleView ? ' Przełącz na widok „Pełny”.' : '';
   if (!cls.students.length) return fail(`Ta klasa nie ma jeszcze uczniów — kliknij ✎ i wpisz listę.${fullHint}`);
   if (tool.desks.length < cls.students.length) return fail(`Za mało stolików: ${cls.students.length} uczniów, ${tool.desks.length} stolików — dodaj stoliki w układzie.${fullHint}`);
   const { rows, rowCount } = deskRows(tool.desks, tool.manualRows);
