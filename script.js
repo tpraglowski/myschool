@@ -456,7 +456,7 @@ function updateToolsNav(screenId = document.querySelector('.view:not(.hidden)')?
   if (!visible) return;
   nav.querySelectorAll('[data-nav-tool]').forEach((b) => b.remove());
   nav.insertAdjacentHTML('beforeend', tools.map((t) =>
-    `<button type="button" class="relative z-10 flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[10px] px-3 py-2 font-bold ${t.id === currentId ? 'text-white' : 'text-muted'}" data-nav-tool="${t.id}">${icon(toolTypeInfo(t.type).icon)} ${escapeHtml(t.label || toolTypeInfo(t.type).name)}</button>`
+    `<button type="button" class="relative z-10 flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[10px] px-3 py-2 font-bold ${t.id === currentId ? 'text-white' : 'text-muted'}" data-nav-tool="${t.id}">${icon(toolTypeInfo(t.type).icon)} ${escapeHtml(toolDisplayName(t))}</button>`
   ).join(''));
   nav.querySelectorAll('[data-nav-tool]').forEach((b) => b.addEventListener('click', () => { if (b.dataset.navTool !== currentId) openTool(b.dataset.navTool); }));
   const active = nav.querySelector(`[data-nav-tool="${currentId}"]`);
@@ -2030,6 +2030,8 @@ const toolTypes = [
   { type: 'seating', icon: 'seat', name: 'Rozsadzanie osób', description: 'Losowo sadza klasę przy stolikach (miejsca, ławki): własny układ stolików, wybrany rząd dla osoby i „nie obok”' },
 ];
 const toolTypeInfo = (type) => toolTypes.find((t) => t.type === type) || toolTypes[0];
+// The random-person tool always keeps its own name; the others can be renamed.
+const toolDisplayName = (tool) => (tool.type === 'picker' ? toolTypeInfo('picker').name : (tool.label || toolTypeInfo(tool.type).name));
 // Every teacher always has every tool: they are added automatically (see
 // ensureDefaultTools) and cannot be deleted — only renamed, pinned and configured.
 function makeTool(type) {
@@ -2078,7 +2080,7 @@ function toolTileHtml(tool) {
       ${tool.type === 'seating' ? tileButton(`data-settings-tool="${tool.id}"`, 'Ustawienia rozsadzania', icon('gear')) : ''}
     </span>
     <span class="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-app text-xl">${icon(info.icon)}</span>
-    <b class="block truncate">${escapeHtml(tool.label || info.name)}</b>
+    <b class="block truncate">${escapeHtml(toolDisplayName(tool))}</b>
     <span class="text-[.85em] text-muted">${info.name}</span>
   </button>`;
 }
@@ -2145,6 +2147,7 @@ function renderToolSettings() {
   if (document.activeElement !== document.querySelector('#toolSettingsName')) document.querySelector('#toolSettingsName').value = tool.label || '';
   document.querySelector('#toolSettingsManual').checked = !!tool.manualRows;
   document.querySelectorAll('input[name="seatDrawMode"]').forEach((r) => { r.checked = r.value === (tool.drawMode || 'random'); });
+  document.querySelectorAll('input[name="seatLayoutMode"]').forEach((r) => { r.checked = (r.value === 'simple') === !!tool.simpleView; });
   const pin = document.querySelector('#toolSettingsPin');
   pin.checked = !!tool.pinned;
   const full = !tool.pinned && pinnedCount() >= MAX_PINNED_TOOLS;
@@ -2165,6 +2168,12 @@ document.querySelector('#toolSettingsName').addEventListener('change', (e) => {
   renameTool(tool, e.target.value);
   renderTeacherTools();
 });
+document.querySelectorAll('input[name="seatLayoutMode"]').forEach((radio) => radio.addEventListener('change', () => {
+  const tool = settingsTool();
+  if (!tool || !radio.checked) return;
+  tool.simpleView = radio.value === 'simple';
+  saveTeacherTools();
+}));
 document.querySelectorAll('input[name="seatDrawMode"]').forEach((radio) => radio.addEventListener('change', () => {
   const tool = settingsTool();
   if (!tool || !radio.checked) return;
@@ -2715,7 +2724,7 @@ function renderPickerScreen() {
   const tool = activeClassTool();
   if (!tool) { show('teacherTools'); return; }
   const cls = toolClass(tool);
-  document.querySelector('#pickerScreenLabel').value = tool.label || '';
+  document.querySelector('#pickerScreenLabel').value = toolDisplayName(tool);
   applyToolLayout('pickerScreen', tool);
   document.querySelector('#pickerClassName').textContent = cls ? `Klasa: ${cls.name}` : '';
   renderClassBars();
@@ -2766,7 +2775,6 @@ async function drawPerson() {
   if (state.activeTool === tool.id) renderPickerScreen();
 }
 document.querySelector('#pickerDraw').addEventListener('click', drawPerson);
-document.querySelector('#pickerScreenLabel').addEventListener('change', (e) => { const t = activeClassTool(); if (t) renameTool(t, e.target.value); });
 document.querySelector('#pickerClearRecent').addEventListener('click', () => {
   const cls = toolClass(activeClassTool());
   if (!cls) return;
@@ -3048,9 +3056,9 @@ const seatBoardEl = document.querySelector('#seatBoard');
 // they stay readable whatever "Wielkość tekstu" is set to. Each name gets the largest size
 // (up to SEAT_FONT_MAX) at which its widest line, measured in the real bold font, still
 // fits inside the desk — longer names simply shrink.
-const SEAT_FONT_MAX = 2.4;
+const SEAT_FONT_MAX = 2.0;
 const SEAT_FONT_MIN = 0.55;
-const SEAT_TEXT_WIDTH = 7.6; // usable width of a desk in cqw (the trapezoid narrows towards the back)
+const SEAT_TEXT_WIDTH = 7.2; // usable width of a desk in cqw (the trapezoid narrows towards the back)
 const seatMeasure = document.createElement('canvas').getContext('2d');
 function seatFontSize(name) {
   seatMeasure.font = `800 100px ${getComputedStyle(seatBoardEl).fontFamily}`;
@@ -3062,11 +3070,11 @@ function seatFontSize(name) {
 function fitSeatBoard() {
   const screen = document.querySelector('#seatingScreen');
   const wrap = seatBoardEl.parentElement;
-  const fullscreen = seatFull;
-  if (!(screen.classList.contains('layout-simple') || fullscreen) || screen.classList.contains('hidden')) { seatBoardEl.style.width = ''; wrap.style.overflowX = ''; return; }
-  const top = wrap.getBoundingClientRect().top + (fullscreen ? screen.scrollTop : window.scrollY);
+  const overlay = seatFull || screen.classList.contains('layout-simple'); // both cover the whole window
+  if (!overlay || screen.classList.contains('hidden')) { seatBoardEl.style.width = ''; wrap.style.overflowX = ''; return; }
+  const top = wrap.getBoundingClientRect().top + screen.scrollTop;
   const cardPad = parseFloat(getComputedStyle(screen.querySelector(':scope > div')).paddingBottom) || 0;
-  const available = window.innerHeight - top - cardPad - (fullscreen ? 16 : 12) - 6; // card padding + page padding + slack
+  const available = window.innerHeight - top - cardPad - 16 - 6; // card padding + overlay padding + slack
   const width = Math.max(260, Math.min(wrap.clientWidth, available * (100 / BOARD_H)));
   seatBoardEl.style.width = `${Math.floor(width)}px`;
   wrap.style.overflowX = 'hidden'; // the board is sized to fit, so no scrollbar
@@ -3192,7 +3200,7 @@ async function drawSeating() {
   const error = document.querySelector('#seatError');
   const fail = (message) => { error.textContent = message; error.classList.remove('hidden'); fitSeatBoard(); };
   if (!cls) return fail(tool.simpleView ? 'Wybierz klasę z listy.' : 'Wybierz klasę albo dodaj nową (+).');
-  const fullHint = tool.simpleView ? ' Przełącz na widok „Pełny”.' : '';
+  const fullHint = tool.simpleView ? ' Zmień widok na „Pełny” w ⚙ ustawieniach narzędzia (Teacher Tools).' : '';
   if (!cls.students.length) return fail(`Ta klasa nie ma jeszcze uczniów — kliknij ✎ i wpisz listę.${fullHint}`);
   if (tool.desks.length < cls.students.length) return fail(`Za mało stolików: ${cls.students.length} uczniów, ${tool.desks.length} stolików — dodaj stoliki w układzie.${fullHint}`);
   const { rows, rowCount } = deskRows(tool.desks, tool.manualRows);

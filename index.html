@@ -25,7 +25,7 @@
       },
     };
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261005d" />
+  <link rel="stylesheet" href="styles.css?v=20261005f" />
 </head>
 <body class="min-h-screen bg-app font-sans text-ink transition-colors">
   <main class="mx-auto w-[calc(100%-2rem)] max-w-[1120px] pb-11 pt-7">
@@ -207,7 +207,7 @@
       <div class="h-[18px]"></div>
       <div class="grid gap-4 lg:grid-cols-2">
         <div class="rounded-[22px] border border-line bg-card p-[22px] text-center shadow-[0_7px_22px_var(--shadow)]">
-          <input class="mx-auto mb-1 block rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-[1.2em] font-bold tracking-tight outline-primary focus:border-line focus:bg-app" id="pickerScreenLabel" maxlength="40" placeholder="Losowanie osoby" />
+          <input class="mx-auto mb-1 block rounded-lg border border-transparent bg-transparent px-2 py-1 text-center text-[1.2em] font-bold tracking-tight outline-primary focus:border-line focus:bg-app" id="pickerScreenLabel" maxlength="40" placeholder="Losowanie osoby"  readonly tabindex="-1" aria-readonly="true" />
           <div class="inline-flex rounded-xl border border-line bg-app p-0.5 text-sm font-bold mt-1" role="group" aria-label="Widok" data-layout-switch>
             <button type="button" class="rounded-[9px] px-3 py-1.5" data-layout="simple" title="Tylko losowanie i wynik">Prosty</button>
             <button type="button" class="rounded-[9px] px-3 py-1.5" data-layout="full" title="Wszystkie panele i ustawienia">Pełny</button>
@@ -278,7 +278,7 @@
       <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
         <div class="seat-top mb-4 grid gap-4 lg:grid-cols-2">
           <div class="seat-left">
-            <input class="mb-3 block w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-[1.2em] font-bold tracking-tight outline-primary focus:border-line focus:bg-app" id="seatingScreenLabel" maxlength="40" placeholder="Rozsadzanie osób" />
+            <input class="mb-3 block w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-[1.2em] font-bold tracking-tight outline-primary focus:border-line focus:bg-app" data-simple-hide id="seatingScreenLabel" maxlength="40" placeholder="Rozsadzanie osób" />
             <div data-class-bar>
               <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Klasa</h3>
               <div class="flex items-center gap-2">
@@ -291,11 +291,11 @@
             </div>
           </div>
           <div class="seat-actions flex flex-wrap content-start items-center gap-2 lg:justify-end">
-            <div class="inline-flex rounded-xl border border-line bg-app p-0.5 text-sm font-bold" role="group" aria-label="Widok" data-layout-switch>
+            <div class="inline-flex rounded-xl border border-line bg-app p-0.5 text-sm font-bold" role="group" aria-label="Widok" data-simple-hide data-layout-switch>
             <button type="button" class="rounded-[9px] px-3 py-1.5" data-layout="simple" title="Tylko losowanie i wynik">Prosty</button>
             <button type="button" class="rounded-[9px] px-3 py-1.5" data-layout="full" title="Wszystkie panele i ustawienia">Pełny</button>
           </div>
-            <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-primary" id="seatFullscreen" type="button"></button>
+            <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-primary" id="seatFullscreen" data-simple-hide type="button"></button>
             <button class="rounded-xl bg-primary px-5 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="seatDraw">Losuj miejsca</button>
             <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-muted" id="seatClear">Wyczyść plan</button>
             <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-primary" id="seatEditToggle" data-technical>Edytuj układ</button>
@@ -719,6 +719,19 @@
       <label class="mb-1 block text-sm font-bold" for="toolSettingsName">Nazwa</label>
       <input class="w-full rounded-[11px] border border-line bg-app px-3 py-2.5 text-ink outline-primary" id="toolSettingsName" maxlength="40" autocomplete="off" />
       <fieldset class="mt-4">
+        <legend class="mb-1.5 text-sm font-bold">Widok</legend>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="block cursor-pointer">
+            <input class="peer sr-only" type="radio" name="seatLayoutMode" value="full" checked />
+            <span class="block rounded-xl border border-line bg-app px-3 py-2.5 peer-checked:border-primary peer-checked:bg-[#4f46e51a] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-primary"><b class="block text-sm">Pełny</b><span class="text-xs text-muted">Wszystkie panele i ustawienia.</span></span>
+          </label>
+          <label class="block cursor-pointer">
+            <input class="peer sr-only" type="radio" name="seatLayoutMode" value="simple" />
+            <span class="block rounded-xl border border-line bg-app px-3 py-2.5 peer-checked:border-primary peer-checked:bg-[#4f46e51a] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-primary"><b class="block text-sm">Prosty</b><span class="text-xs text-muted">Sama sala, losowanie i wybór klasy — bez logo i menu.</span></span>
+          </label>
+        </div>
+      </fieldset>
+      <fieldset class="mt-4">
         <legend class="mb-1.5 text-sm font-bold">Sposób losowania</legend>
         <div class="grid gap-2">
         <label class="block cursor-pointer">
@@ -837,7 +850,7 @@
     </form>
   </div>
 
-  <canvas class="pointer-events-none fixed inset-0 z-[5] hidden h-full w-full" id="seasonCanvas" aria-hidden="true"></canvas>
-  <script type="module" src="script.js?v=20261005d"></script>
+  <canvas class="pointer-events-none fixed inset-0 z-[12] hidden h-full w-full" id="seasonCanvas" aria-hidden="true"></canvas>
+  <script type="module" src="script.js?v=20261005f"></script>
 </body>
 </html>

@@ -63,7 +63,11 @@ body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in 
 #pickerScreen.layout-simple > .grid { grid-template-columns: minmax(0, 640px); justify-content: center; }
 #seatingScreen:is(.layout-simple, .seat-full) .seat-row-no { display: none; }
 /* Full-screen seating plan (the "Pełny ekran" button). */
-#seatingScreen.seat-full { position: fixed; inset: 0; z-index: 40; background: var(--bg); padding: 16px; overflow: auto; }
+/* The simple view is the same overlay as full screen, minus real full screen: the logo,
+   menu and other page chrome are covered; only back, class, draw, clear and the room remain.
+   it sits above the page chrome (menu buttons are z-10) and under the seasonal-effect canvas (z-12), so snow/leaves still fall over it. */
+#seatingScreen:is(.layout-simple, .seat-full) { position: fixed; inset: 0; z-index: 11; background: var(--bg); padding: 16px; overflow: auto; }
+.layout-simple [data-simple-hide] { display: none !important; }
 #seatingScreen.seat-full #seatBoard { min-width: 0; }
 #seatingScreen.seat-full > .h-\[18px\] { height: 8px; }
 /* Simple view of the seating tool: compact chrome and a board sized by fitSeatBoard() so
