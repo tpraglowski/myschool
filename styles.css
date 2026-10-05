@@ -59,19 +59,24 @@ body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in 
 [data-simple-only] { display: none; }
 .layout-simple [data-simple-only] { display: block; }
 .layout-simple [data-technical] { display: none !important; }
+#seatingScreen.seat-full [data-technical] { display: none !important; }
 #pickerScreen.layout-simple > .grid { grid-template-columns: minmax(0, 640px); justify-content: center; }
-#seatingScreen.layout-simple .seat-row-no { display: none; }
+#seatingScreen:is(.layout-simple, .seat-full) .seat-row-no { display: none; }
+/* Full-screen seating plan (the "Pełny ekran" button). */
+#seatingScreen.seat-full { position: fixed; inset: 0; z-index: 40; background: var(--bg); padding: 16px; overflow: auto; }
+#seatingScreen.seat-full #seatBoard { min-width: 0; }
+#seatingScreen.seat-full > .h-\[18px\] { height: 8px; }
 /* Simple view of the seating tool: compact chrome and a board sized by fitSeatBoard() so
    everything is visible without scrolling. */
-#seatingScreen.layout-simple > .h-\[18px\] { height: 8px; }
-#seatingScreen.layout-simple #seatBoard { min-width: 0; }
-#seatingScreen.layout-simple > div { padding: 14px; }
-#seatingScreen.layout-simple .seat-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 10px; }
-#seatingScreen.layout-simple .seat-left { display: flex; flex: 1 1 300px; align-items: center; gap: 10px; min-width: 0; }
-#seatingScreen.layout-simple .seat-left > input { flex: 0 1 170px; width: auto; margin: 0; min-width: 0; }
-#seatingScreen.layout-simple .seat-left > [data-class-bar] { flex: 1 1 150px; min-width: 0; }
-#seatingScreen.layout-simple .seat-left h3 { display: none; }
-#seatingScreen.layout-simple .seat-actions { justify-content: flex-start; }
+#seatingScreen:is(.layout-simple, .seat-full) > .h-\[18px\] { height: 8px; }
+#seatingScreen:is(.layout-simple, .seat-full) #seatBoard { min-width: 0; }
+#seatingScreen:is(.layout-simple, .seat-full) > div { padding: 14px; }
+#seatingScreen:is(.layout-simple, .seat-full) .seat-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 10px; }
+#seatingScreen:is(.layout-simple, .seat-full) .seat-left { display: flex; flex: 1 1 300px; align-items: center; gap: 10px; min-width: 0; }
+#seatingScreen:is(.layout-simple, .seat-full) .seat-left > input { flex: 0 1 170px; width: auto; margin: 0; min-width: 0; }
+#seatingScreen:is(.layout-simple, .seat-full) .seat-left > [data-class-bar] { flex: 1 1 150px; min-width: 0; }
+#seatingScreen:is(.layout-simple, .seat-full) .seat-left h3 { display: none; }
+#seatingScreen:is(.layout-simple, .seat-full) .seat-actions { justify-content: flex-start; }
 /* All tool screens: tighter page chrome so they fit one screen without scrolling. */
 body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen):not(.hidden)) main { padding-bottom: 12px; }
 body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen):not(.hidden)) header { margin-bottom: 14px; }

@@ -25,7 +25,7 @@
       },
     };
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261004x" />
+  <link rel="stylesheet" href="styles.css?v=20261005d" />
 </head>
 <body class="min-h-screen bg-app font-sans text-ink transition-colors">
   <main class="mx-auto w-[calc(100%-2rem)] max-w-[1120px] pb-11 pt-7">
@@ -163,7 +163,6 @@
     <section class="view hidden" id="teacherTools">
       <div class="mb-6 flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-start">
         <div><h1 class="text-[clamp(1.7em,4vw,2.5em)] font-extrabold tracking-tight">Teacher Tools</h1><p class="mt-1.5 text-muted">Twoje narzędzia — widoczne tylko dla Ciebie.</p></div>
-        <button class="self-start rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="editTeacherTools">Edytuj</button>
       </div>
       <p class="mb-3 hidden rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" id="pinNote"></p>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-[17px]" id="teacherToolsGrid"></div>
@@ -296,6 +295,7 @@
             <button type="button" class="rounded-[9px] px-3 py-1.5" data-layout="simple" title="Tylko losowanie i wynik">Prosty</button>
             <button type="button" class="rounded-[9px] px-3 py-1.5" data-layout="full" title="Wszystkie panele i ustawienia">Pełny</button>
           </div>
+            <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-primary" id="seatFullscreen" type="button"></button>
             <button class="rounded-xl bg-primary px-5 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="seatDraw">Losuj miejsca</button>
             <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-muted" id="seatClear">Wyczyść plan</button>
             <button class="rounded-xl bg-app px-4 py-2.5 font-bold text-primary" id="seatEditToggle" data-technical>Edytuj układ</button>
@@ -712,17 +712,6 @@
     </div>
   </dialog>
 
-  <dialog class="m-0 h-[100dvh] max-h-none w-screen max-w-none bg-app p-0 text-ink" id="toolPicker">
-    <div class="mx-auto flex h-full w-[calc(100%-2rem)] max-w-[1120px] flex-col py-7">
-      <div class="mb-5 flex items-center justify-between gap-3">
-        <h2 class="text-[clamp(1.5em,4vw,2.2em)] font-extrabold tracking-tight">Dodaj narzędzie</h2>
-        <button class="rounded-[10px] bg-card px-3.5 py-2.5 font-bold text-muted" type="button" id="cancelToolPicker"><i data-icon="x"></i> Zamknij</button>
-      </div>
-      <input class="mb-5 w-full rounded-xl border border-line bg-card px-4 py-3 text-ink outline-primary" id="toolSearch" type="search" placeholder="Szukaj funkcji…" autocomplete="off" />
-      <div class="grid flex-1 content-start gap-3 overflow-y-auto sm:grid-cols-[repeat(auto-fill,minmax(260px,1fr))]" id="toolPickerList"></div>
-    </div>
-  </dialog>
-
   <dialog class="w-[min(420px,calc(100%-28px))] rounded-[23px] bg-card p-0 text-ink shadow-[0_25px_60px_#10172c55] backdrop:bg-[#17213c80]" id="toolSettings">
     <div class="p-6">
       <h2 class="text-[1.35em] font-bold">Ustawienia rozsadzania</h2>
@@ -766,8 +755,7 @@
         <i data-icon="pin"></i> Przypięte
       </label>
       <p class="mt-1 text-xs text-muted" id="toolSettingsPinNote"></p>
-      <div class="mt-6 flex items-center justify-between gap-3">
-        <button class="rounded-[10px] bg-app px-3.5 py-2.5 font-bold text-red-600" type="button" id="toolSettingsDelete"><i data-icon="trash"></i> <span>Usuń narzędzie</span></button>
+      <div class="mt-6 flex items-center justify-end gap-3">
         <button class="rounded-xl bg-primary px-5 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" type="button" id="toolSettingsDone">Gotowe</button>
       </div>
     </div>
@@ -850,6 +838,6 @@
   </div>
 
   <canvas class="pointer-events-none fixed inset-0 z-[5] hidden h-full w-full" id="seasonCanvas" aria-hidden="true"></canvas>
-  <script type="module" src="script.js?v=20261004x"></script>
+  <script type="module" src="script.js?v=20261005d"></script>
 </body>
 </html>

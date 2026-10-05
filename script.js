@@ -30,6 +30,8 @@ const ICONS = {
   cap: '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  expand: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+  shrink: '<path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>',
   undo: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
   redo: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
 };
@@ -171,7 +173,6 @@ const state = {
   editLesson: null,
   lessonTargetClass: null,
   lessonIsPersonal: false,
-  teacherToolsEditing: false,
   timerRuntime: {},
   activeTimerTool: null,
   activeTool: null,
@@ -432,6 +433,7 @@ function show(id) {
     pill.style.height = activeBtn.offsetHeight + 'px';
   }
   updateToolsNav(id);
+  if (id !== 'seatingScreen') setSeatFull(false);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 window.show = show;
@@ -1701,7 +1703,6 @@ function logout(message) {
     if (el) el.innerHTML = '';
   });
   state.timerRuntime = {};
-  state.teacherToolsEditing = false;
   state.activeTimerTool = null;
   state.activeTool = null;
   editingClassId = null;
@@ -2029,40 +2030,37 @@ const toolTypes = [
   { type: 'seating', icon: 'seat', name: 'Rozsadzanie osób', description: 'Losowo sadza klasę przy stolikach (miejsca, ławki): własny układ stolików, wybrany rząd dla osoby i „nie obok”' },
 ];
 const toolTypeInfo = (type) => toolTypes.find((t) => t.type === type) || toolTypes[0];
-const toolPickerDialog = document.querySelector('#toolPicker');
-function renderToolPickerList() {
-  const query = document.querySelector('#toolSearch').value.trim().toLocaleLowerCase('pl-PL');
-  const matches = toolTypes.filter((t) => `${t.name} ${t.description}`.toLocaleLowerCase('pl-PL').includes(query));
-  const list = document.querySelector('#toolPickerList');
-  list.innerHTML = matches.length ? matches.map((t) =>
-    `<button type="button" class="flex items-center gap-3 rounded-2xl border border-line bg-card p-4 text-left shadow-[0_4px_15px_var(--shadow)] transition hover:border-primary" data-pick-tool="${t.type}">
-      <span class="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-app text-2xl">${icon(t.icon)}</span>
-      <span><b class="block">${t.name}</b><span class="text-[.85em] text-muted">${t.description}</span></span>
-    </button>`
-  ).join('') : emptyState('Brak wyników', 'Żadna funkcja nie pasuje do wyszukiwania.');
-  list.querySelectorAll('[data-pick-tool]').forEach((b) => b.addEventListener('click', () => {
-    addTeacherTool(b.dataset.pickTool);
-    toolPickerDialog.close();
-  }));
-}
-function openToolPicker() {
-  document.querySelector('#toolSearch').value = '';
-  renderToolPickerList();
-  toolPickerDialog.showModal();
-  document.querySelector('#toolSearch').focus();
-}
-document.querySelector('#toolSearch').addEventListener('input', renderToolPickerList);
-document.querySelector('#cancelToolPicker').addEventListener('click', () => toolPickerDialog.close());
-function addTeacherTool(type) {
+// Every teacher always has every tool: they are added automatically (see
+// ensureDefaultTools) and cannot be deleted — only renamed, pinned and configured.
+function makeTool(type) {
   const account = currentAccount();
-  const tool = { id: crypto.randomUUID(), type, label: '' };
+  const tool = { id: type, type, label: '' };
   if (type === 'timer') tool.duration = account?.lastTimerSeconds || 300;
   if (type === 'picker' || type === 'groups' || type === 'seating') tool.classId = teacherClasses().length === 1 ? teacherClasses()[0].id : null;
   if (type === 'seating') Object.assign(tool, { desks: defaultDesks(), seatPlans: {} });
   if (type === 'groups') Object.assign(tool, { groupMode: 'count', groupValue: 2 });
-  teacherToolsFor().push(tool);
-  saveTeacherTools();
-  renderTeacherTools();
+  return tool;
+}
+// Adds whichever default tools are missing (new teachers, and any tool type added to the
+// app later) and quietly repairs a tool whose saved data got damaged. Stable ids ("timer",
+// "picker", …) mean two devices logging in at once can't create duplicates.
+function ensureDefaultTools() {
+  const account = currentAccount();
+  if (!account) return;
+  const tools = account.teacherTools = (Array.isArray(account.teacherTools) ? account.teacherTools : []).filter((t) => t && t.type && t.id);
+  let changed = false;
+  toolTypes.forEach((info) => {
+    if (!tools.some((t) => t.type === info.type)) { tools.push(makeTool(info.type)); changed = true; }
+  });
+  tools.forEach((t) => {
+    if (t.type === 'timer' && !(t.duration > 0)) { t.duration = 300; changed = true; }
+    if (t.type === 'seating') {
+      if (!Array.isArray(t.desks)) { t.desks = defaultDesks(); changed = true; }
+      if (!t.seatPlans || typeof t.seatPlans !== 'object') { t.seatPlans = {}; changed = true; }
+    }
+    if (t.type === 'groups' && !(t.groupValue >= 1)) { Object.assign(t, { groupMode: 'count', groupValue: 2 }); changed = true; }
+  });
+  if (changed) saveTeacherTools();
 }
 function ensureTimerRuntime(tool) {
   return state.timerRuntime[tool.id] || (state.timerRuntime[tool.id] = { remaining: tool.duration, running: false });
@@ -2070,25 +2068,14 @@ function ensureTimerRuntime(tool) {
 // A tile is just an entry point — clicking it opens that tool's own full-screen view
 // (the timer tile never shows the countdown itself).
 const MAX_PINNED_TOOLS = 5;
-// Deleting a tool takes two clicks on the trash button (the first one arms it for 4 s),
-// so a stray tap can't remove a tool and there's no native dialog that could be blocked.
-let armedDeleteTool = null;
-let armedDeleteTimer = null;
-function armToolDelete(id) {
-  armedDeleteTool = id;
-  clearTimeout(armedDeleteTimer);
-  armedDeleteTimer = setTimeout(() => { armedDeleteTool = null; renderTeacherTools(); }, 4000);
-  renderTeacherTools();
-}
 const pinnedCount = () => teacherToolsFor().filter((t) => t.pinned).length;
 const tileButton = (attrs, label, content, extra = '') => `<span role="button" tabindex="0" class="grid h-8 min-w-8 place-items-center rounded-lg bg-app px-1.5 text-sm font-bold ${extra}" ${attrs} aria-label="${label}" title="${label}">${content}</span>`;
-function toolTileHtml(tool, editing) {
+function toolTileHtml(tool) {
   const info = toolTypeInfo(tool.type);
   return `<button type="button" class="relative min-h-[140px] rounded-[20px] border bg-card p-5 text-left shadow-[0_7px_22px_var(--shadow)] transition hover:-translate-y-1 hover:shadow-lg ${tool.pinned ? 'border-primary' : 'border-line'}" data-open-tool="${tool.id}">
     <span class="absolute right-3 top-3 z-10 flex gap-1.5">
       ${tileButton(`data-pin-tool="${tool.id}"`, tool.pinned ? 'Odepnij' : 'Przypnij', icon('pin'), tool.pinned ? 'bg-primary text-white' : 'opacity-60')}
       ${tool.type === 'seating' ? tileButton(`data-settings-tool="${tool.id}"`, 'Ustawienia rozsadzania', icon('gear')) : ''}
-      ${armedDeleteTool === tool.id ? tileButton(`data-delete-tool="${tool.id}"`, 'Kliknij ponownie, aby usunąć', icon('trash'), 'bg-red-600 text-white') : tileButton(`data-delete-tool="${tool.id}"`, 'Usuń narzędzie', icon('trash'), 'text-red-600')}
     </span>
     <span class="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-app text-xl">${icon(info.icon)}</span>
     <b class="block truncate">${escapeHtml(tool.label || info.name)}</b>
@@ -2102,17 +2089,6 @@ function openTool(id) {
   else if (tool.type === 'groups') openGroupsScreen(id);
   else if (tool.type === 'seating') openSeatingScreen(id);
   else openTimerScreen(id);
-}
-function deleteTool(id) {
-  const account = currentAccount();
-  if (!account) return;
-  account.teacherTools = teacherToolsFor().filter((t) => t.id !== id);
-  delete state.timerRuntime[id];
-  delete state.pickerResult[id];
-  delete state.groupsResult[id];
-  saveTeacherTools();
-  renderTeacherTools();
-  updateHeaderTimerIndicator();
 }
 // At most MAX_PINNED_TOOLS tools can be pinned; pinned ones are listed first.
 function setPinned(tool, pinned) {
@@ -2131,18 +2107,11 @@ function showPinNote() {
   pinNoteTimer = setTimeout(() => note.classList.add('hidden'), 4000);
 }
 function bindTeacherToolsEvents(el) {
-  document.querySelector('#addTeacherTool')?.addEventListener('click', openToolPicker);
   const onTileButton = (selector, handler) => el.querySelectorAll(selector).forEach((b) => {
     b.addEventListener('pointerdown', (e) => e.stopPropagation());
     const run = (e) => { e.preventDefault(); e.stopPropagation(); handler(b); };
     b.addEventListener('click', run);
     b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') run(e); });
-  });
-  onTileButton('[data-delete-tool]', (b) => {
-    if (armedDeleteTool !== b.dataset.deleteTool) { armToolDelete(b.dataset.deleteTool); return; }
-    armedDeleteTool = null;
-    clearTimeout(armedDeleteTimer);
-    deleteTool(b.dataset.deleteTool);
   });
   onTileButton('[data-pin-tool]', (b) => {
     const tool = teacherToolsFor().find((t) => t.id === b.dataset.pinTool);
@@ -2152,14 +2121,14 @@ function bindTeacherToolsEvents(el) {
   el.querySelectorAll('[data-open-tool]').forEach((b) => b.addEventListener('click', () => openTool(b.dataset.openTool)));
 }
 const toolSectionTitle = (text) => `<h3 class="col-span-full text-sm font-bold uppercase tracking-wide text-muted">${text}</h3>`;
-function renderToolSections(tools, editing) {
+function renderToolSections(tools) {
   const pinned = tools.filter((t) => t.pinned);
-  if (!pinned.length) return tools.map((t) => toolTileHtml(t, editing)).join('');
+  if (!pinned.length) return tools.map((t) => toolTileHtml(t)).join('');
   const rest = tools.filter((t) => !t.pinned);
   return toolSectionTitle(`${icon('pin')} Przypięte (${pinned.length}/${MAX_PINNED_TOOLS})`)
-    + pinned.map((t) => toolTileHtml(t, editing)).join('')
-    + (rest.length || editing ? toolSectionTitle('Pozostałe narzędzia') : '')
-    + rest.map((t) => toolTileHtml(t, editing)).join('');
+    + pinned.map((t) => toolTileHtml(t)).join('')
+    + (rest.length ? toolSectionTitle('Pozostałe narzędzia') : '')
+    + rest.map((t) => toolTileHtml(t)).join('');
 }
 // Settings dialog of the seating tool. They belong to the tool and hold for every class
 // (never for just the one class that happens to be selected). Everything applies
@@ -2214,40 +2183,13 @@ document.querySelector('#toolSettingsPin').addEventListener('change', (e) => {
   if (!setPinned(tool, e.target.checked)) e.target.checked = false;
   renderToolSettings();
 });
-let settingsDeleteTimer = null;
-const disarmSettingsDelete = () => {
-  clearTimeout(settingsDeleteTimer);
-  settingsDeleteTimer = null;
-  document.querySelector('#toolSettingsDelete').lastChild.textContent = 'Usuń narzędzie';
-};
-document.querySelector('#toolSettingsDelete').addEventListener('click', () => {
-  if (!settingsTool()) return;
-  if (!settingsDeleteTimer) {
-    document.querySelector('#toolSettingsDelete').lastChild.textContent = 'Na pewno? Kliknij ponownie';
-    settingsDeleteTimer = setTimeout(disarmSettingsDelete, 4000);
-    return;
-  }
-  disarmSettingsDelete();
-  deleteTool(settingsToolId);
-  toolSettingsDialog.close();
-});
 document.querySelector('#toolSettingsDone').addEventListener('click', () => toolSettingsDialog.close());
 function renderTeacherTools() {
   if (!isTeacher()) return;
-  const tools = teacherToolsFor();
-  const editing = state.teacherToolsEditing;
-  document.querySelector('#editTeacherTools').textContent = editing ? 'Gotowe' : 'Edytuj';
-  const addTileHtml = editing ? `<button type="button" class="grid min-h-[140px] place-items-center rounded-[20px] border-2 border-dashed border-line text-4xl font-bold text-muted" id="addTeacherTool" aria-label="Dodaj narzędzie">+</button>` : '';
-  const el = document.querySelector('#teacherToolsGrid');
-  el.innerHTML = !tools.length && !editing
-    ? emptyState('Brak narzędzi', 'Kliknij „Edytuj”, aby dodać pierwsze narzędzie.')
-    : renderToolSections(tools, editing) + addTileHtml;
-  bindTeacherToolsEvents(el);
+  ensureDefaultTools();
+  document.querySelector('#teacherToolsGrid').innerHTML = renderToolSections(teacherToolsFor());
+  bindTeacherToolsEvents(document.querySelector('#teacherToolsGrid'));
 }
-document.querySelector('#editTeacherTools').addEventListener('click', () => {
-  state.teacherToolsEditing = !state.teacherToolsEditing;
-  renderTeacherTools();
-});
 
 // ---------- Timer full-screen view ----------
 function openTimerScreen(id) {
@@ -3120,13 +3062,48 @@ function seatFontSize(name) {
 function fitSeatBoard() {
   const screen = document.querySelector('#seatingScreen');
   const wrap = seatBoardEl.parentElement;
-  if (!screen.classList.contains('layout-simple') || screen.classList.contains('hidden')) { seatBoardEl.style.width = ''; return; }
-  const top = wrap.getBoundingClientRect().top + window.scrollY;
-  const available = window.innerHeight - top - 14 - 12 - 6; // card padding + page padding + slack
+  const fullscreen = seatFull;
+  if (!(screen.classList.contains('layout-simple') || fullscreen) || screen.classList.contains('hidden')) { seatBoardEl.style.width = ''; wrap.style.overflowX = ''; return; }
+  const top = wrap.getBoundingClientRect().top + (fullscreen ? screen.scrollTop : window.scrollY);
+  const cardPad = parseFloat(getComputedStyle(screen.querySelector(':scope > div')).paddingBottom) || 0;
+  const available = window.innerHeight - top - cardPad - (fullscreen ? 16 : 12) - 6; // card padding + page padding + slack
   const width = Math.max(260, Math.min(wrap.clientWidth, available * (100 / BOARD_H)));
   seatBoardEl.style.width = `${Math.floor(width)}px`;
+  wrap.style.overflowX = 'hidden'; // the board is sized to fit, so no scrollbar
 }
 window.addEventListener('resize', fitSeatBoard);
+// "Pełny ekran": the seating screen covers the whole window (a fixed overlay, so it works on
+// every device, phones included) and, where the browser allows it, also goes into real
+// full screen (hides the browser's own bars). Esc / the same button leave.
+let seatFull = false;
+let seatRealFullscreen = false;
+const seatFullscreenButton = document.querySelector('#seatFullscreen');
+function renderSeatFullscreenButton() {
+  seatFullscreenButton.innerHTML = `${icon(seatFull ? 'shrink' : 'expand')} ${seatFull ? 'Zamknij pełny ekran' : 'Pełny ekran'}`;
+}
+function setSeatFull(on) {
+  if (seatFull === on) return;
+  seatFull = on;
+  const screen = document.querySelector('#seatingScreen');
+  screen.classList.toggle('seat-full', on);
+  if (on) {
+    screen.scrollTop = 0;
+    screen.requestFullscreen?.().then(() => { seatRealFullscreen = true; }).catch(() => { /* the overlay alone is fine */ });
+  } else {
+    seatRealFullscreen = false;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+  renderSeatFullscreenButton();
+  fitSeatBoard();
+}
+renderSeatFullscreenButton();
+seatFullscreenButton.addEventListener('click', () => setSeatFull(!seatFull));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && seatFull && !document.fullscreenElement) setSeatFull(false); });
+// Esc in real full screen is handled by the browser: close the overlay with it.
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && seatRealFullscreen) setSeatFull(false);
+  fitSeatBoard();
+});
 const seatTool = () => activeClassTool();
 const seatPlanFor = (tool, cls) => (cls && tool.seatPlans?.[cls.id]) || {};
 function renderSeatBoard(animate = false) {
@@ -3547,8 +3524,8 @@ function setupUserInterface() {
   document.querySelector('#addSubject').classList.toggle('hidden', isParent());
   document.querySelector('#navCompetences').classList.toggle('hidden', isTeacher());
   document.querySelector('#navTeacherTools').classList.toggle('hidden', !isTeacher());
-  state.teacherToolsEditing = false;
   if (isTeacher()) {
+    ensureDefaultTools();
     renderTeacherTools();
     migrateAccountClasses().catch((err) => console.error('Nie udało się przenieść klas na wspólną listę', err));
   }
