@@ -82,6 +82,14 @@ body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen):not(.hi
 body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen):not(.hidden)) header { margin-bottom: 14px; }
 :is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen) > .h-\[18px\] { height: 8px; }
 
+/* Collapsible cards (dashboard, admin panel): the body slides shut via a grid-row transition. */
+.collapse-wrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .3s ease; }
+.collapse-wrap.is-collapsed { grid-template-rows: 0fr; }
+.collapse-wrap > div { min-height: 0; overflow: hidden; }
+[data-collapsible].is-collapsed > [data-collapse-head] { margin-bottom: 0; }
+.collapse-btn .icon { transition: transform .25s ease; }
+.is-collapsed > [data-collapse-head] .collapse-btn .icon { transform: rotate(-90deg); }
+
 /* Fade-in used on the view that becomes active */
 @keyframes appear {
   from { opacity: 0; transform: translateY(8px); }

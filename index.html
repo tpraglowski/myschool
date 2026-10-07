@@ -25,7 +25,7 @@
       },
     };
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261007a" />
+  <link rel="stylesheet" href="styles.css?v=20261007b" />
 </head>
 <body class="min-h-screen bg-app font-sans text-ink transition-colors">
   <main class="mx-auto w-[calc(100%-2rem)] max-w-[1120px] pb-11 pt-7">
@@ -70,22 +70,31 @@
       <div class="mb-6 hidden rounded-2xl border-l-[5px] border-amber-500 bg-amber-50 px-5 py-4 text-amber-900" id="graduatedNotice"></div>
 
       <div class="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-[1.3fr_1fr]" id="dashboardTop">
-        <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" id="nextLessonCard">
-          <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-muted">Najbliższa lekcja</h2>
-          <div id="nextLessonBody"></div>
+        <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" id="nextLessonCard" data-collapsible="dash-next">
+          <div class="mb-3 flex items-center justify-between gap-3" data-collapse-head>
+            <h2 class="text-sm font-bold uppercase tracking-wide text-muted">Najbliższa lekcja</h2>
+            <button type="button" class="collapse-btn grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-app text-muted" data-collapse-toggle aria-expanded="true" aria-label="Zwiń lub rozwiń" title="Zwiń / rozwiń"><i data-icon="chevron"></i></button>
+          </div>
+          <div class="collapse-wrap" data-collapse-wrap><div><div id="nextLessonBody"></div></div></div>
         </div>
-        <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" id="todaySummaryCard">
-          <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-muted">Dzisiejszy dzień</h2>
-          <div id="todaySummaryBody"></div>
+        <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" id="todaySummaryCard" data-collapsible="dash-today">
+          <div class="mb-3 flex items-center justify-between gap-3" data-collapse-head>
+            <h2 class="text-sm font-bold uppercase tracking-wide text-muted">Dzisiejszy dzień</h2>
+            <button type="button" class="collapse-btn grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-app text-muted" data-collapse-toggle aria-expanded="true" aria-label="Zwiń lub rozwiń" title="Zwiń / rozwiń"><i data-icon="chevron"></i></button>
+          </div>
+          <div class="collapse-wrap" data-collapse-wrap><div><div id="todaySummaryBody"></div></div></div>
         </div>
       </div>
 
-      <div class="mb-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" id="upcomingEventsCard">
-        <div class="mb-3 flex items-center justify-between gap-3">
+      <div class="mb-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" id="upcomingEventsCard" data-collapsible="dash-events">
+        <div class="mb-3 flex items-center justify-between gap-3" data-collapse-head>
           <h2 class="text-sm font-bold uppercase tracking-wide text-muted">Nadchodzące wydarzenia</h2>
-          <button class="text-sm font-bold text-primary" data-open="events">Zobacz wszystkie →</button>
+          <div class="flex items-center gap-3">
+            <button class="text-sm font-bold text-primary" data-open="events">Zobacz wszystkie →</button>
+            <button type="button" class="collapse-btn grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-app text-muted" data-collapse-toggle aria-expanded="true" aria-label="Zwiń lub rozwiń" title="Zwiń / rozwiń"><i data-icon="chevron"></i></button>
+          </div>
         </div>
-        <div class="grid gap-2" id="upcomingEventsBody"></div>
+        <div class="collapse-wrap" data-collapse-wrap><div><div class="grid gap-2" id="upcomingEventsBody"></div></div></div>
       </div>
 
       <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-muted">Szybkie akcje</h2>
@@ -429,57 +438,58 @@
     </section>
 
     <section class="view hidden" id="admin">
-      <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="home">← Wróć</button>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="home">← Wróć</button>
+        <button class="rounded-[10px] bg-card px-3.5 py-2 font-bold text-muted shadow-[0_4px_15px_var(--shadow)]" id="adminCollapseAll">Zwiń wszystko</button>
+      </div>
       <div class="h-[18px]"></div>
-      <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
-        <div class="mb-[17px] flex items-center justify-between gap-3">
+      <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" data-collapsible="admin-accounts">
+        <div class="mb-[17px] flex items-center justify-between gap-3" data-collapse-head>
           <h2 class="text-[1.2em] font-bold tracking-tight">Panel administratora</h2>
           <div class="flex items-center gap-2.5">
             <span class="text-muted">Konta bez haseł</span>
-            <button class="grid h-8 w-8 place-items-center rounded-lg bg-app text-lg font-bold text-muted" id="toggleAccountList" aria-label="Zwiń/rozwiń listę kont" aria-expanded="true">▾</button>
+            <button type="button" class="collapse-btn grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-app text-muted" data-collapse-toggle aria-expanded="true" aria-label="Zwiń lub rozwiń" title="Zwiń / rozwiń"><i data-icon="chevron"></i></button>
           </div>
         </div>
-        <div class="grid grid-rows-[1fr] overflow-hidden transition-[grid-template-rows] duration-300 ease-out" id="accountListWrap">
-          <div class="overflow-hidden">
-            <div class="grid gap-2.5" id="accountList"></div>
-          </div>
-        </div>
+        <div class="collapse-wrap" data-collapse-wrap><div><div class="grid gap-2.5" id="accountList"></div></div></div>
       </div>
-      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
-        <div class="mb-[17px] flex items-center justify-between gap-3">
+      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" data-collapsible="admin-teachers">
+        <div class="mb-[17px] flex items-center justify-between gap-3" data-collapse-head>
           <h2 class="text-[1.2em] font-bold tracking-tight">Oczekujący nauczyciele</h2>
-          <span class="text-muted">Wymagają zatwierdzenia</span>
+          <div class="flex items-center gap-2.5"><span class="text-muted">Wymagają zatwierdzenia</span><button type="button" class="collapse-btn grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-app text-muted" data-collapse-toggle aria-expanded="true" aria-label="Zwiń lub rozwiń" title="Zwiń / rozwiń"><i data-icon="chevron"></i></button></div>
         </div>
-        <div class="grid gap-2.5" id="pendingTeachers"></div>
+        <div class="collapse-wrap" data-collapse-wrap><div><div class="grid gap-2.5" id="pendingTeachers"></div></div></div>
       </div>
-      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
-        <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3">
+      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" data-collapsible="admin-lessons">
+        <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3" data-collapse-head>
           <h2 class="text-[1.2em] font-bold tracking-tight">Plan lekcji klasy</h2>
           <div class="flex items-center gap-2">
             <select class="rounded-[11px] border border-[#dce1ee] bg-app px-3 py-2 text-ink" id="adminClassSelect">
               <!-- options filled by classOptionsHtml -->
             </select>
             <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addAdminLesson">+ Dodaj lekcję</button>
+            <button type="button" class="collapse-btn grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-app text-muted" data-collapse-toggle aria-expanded="true" aria-label="Zwiń lub rozwiń" title="Zwiń / rozwiń"><i data-icon="chevron"></i></button>
           </div>
         </div>
-        <div class="mb-[17px] flex flex-wrap gap-1.5" id="adminDayTabs"></div>
-        <div id="adminLessonTable"></div>
+        <div class="collapse-wrap" data-collapse-wrap><div><div class="mb-[17px] flex flex-wrap gap-1.5" id="adminDayTabs"></div>
+        <div id="adminLessonTable"></div></div></div>
       </div>
-      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
-        <div class="mb-[17px] flex items-center justify-between gap-3">
+      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" data-collapsible="admin-replacements">
+        <div class="mb-[17px] flex items-center justify-between gap-3" data-collapse-head>
           <h2 class="text-[1.2em] font-bold tracking-tight">Zgłoszone zastępstwa</h2>
-          <span class="text-muted">Oczekują na zatwierdzenie</span>
+          <div class="flex items-center gap-2.5"><span class="text-muted">Oczekują na zatwierdzenie</span><button type="button" class="collapse-btn grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-app text-muted" data-collapse-toggle aria-expanded="true" aria-label="Zwiń lub rozwiń" title="Zwiń / rozwiń"><i data-icon="chevron"></i></button></div>
         </div>
-        <div class="grid gap-2.5" id="pendingReplacements"></div>
+        <div class="collapse-wrap" data-collapse-wrap><div><div class="grid gap-2.5" id="pendingReplacements"></div></div></div>
       </div>
-      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
-        <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3">
+      <div class="mt-6 rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]" data-collapsible="admin-starter">
+        <div class="mb-[17px] flex flex-wrap items-center justify-between gap-3" data-collapse-head>
           <div><h2 class="text-[1.2em] font-bold tracking-tight">Pakiet startowych kompetencji</h2><p class="text-sm text-muted">Trafia do klasy przy jej pierwszym koncie, a każda zmiana tutaj (dodanie lub usunięcie przedmiotu albo kompetencji) działa też w już istniejących klasach tego rocznika.</p></div>
           <button class="rounded-xl bg-primary px-4 py-2.5 font-extrabold text-white shadow-[0_7px_15px_#4f46e536]" id="addStarterSubject">+ Dodaj przedmiot</button>
+          <button type="button" class="collapse-btn grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-app text-muted" data-collapse-toggle aria-expanded="true" aria-label="Zwiń lub rozwiń" title="Zwiń / rozwiń"><i data-icon="chevron"></i></button>
         </div>
-        <div class="mb-[17px] flex flex-wrap gap-1.5" id="starterGradeTabs"></div>
+        <div class="collapse-wrap" data-collapse-wrap><div><div class="mb-[17px] flex flex-wrap gap-1.5" id="starterGradeTabs"></div>
         <p class="mb-3 hidden rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-900" id="starterSyncNote"></p>
-        <div class="grid gap-3" id="starterSubjectList"></div>
+        <div class="grid gap-3" id="starterSubjectList"></div></div></div>
       </div>
     </section>
 
@@ -855,6 +865,6 @@
   </div>
 
   <canvas class="pointer-events-none fixed inset-0 z-[12] hidden h-full w-full" id="seasonCanvas" aria-hidden="true"></canvas>
-  <script type="module" src="script.js?v=20261007a"></script>
+  <script type="module" src="script.js?v=20261007b"></script>
 </body>
 </html>

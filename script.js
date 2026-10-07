@@ -32,6 +32,7 @@ const ICONS = {
   alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   expand: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
   shrink: '<path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>',
   undo: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
   redo: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
 };
@@ -1875,23 +1876,46 @@ document.querySelector('#loginForm').addEventListener('submit', async (e) => {
   finishLogin(user);
 });
 
-// Account list is admin-only and can grow long, so it's collapsible — state is a
-// per-device UI preference (not synced to the account like settings are).
-const accountListWrap = document.querySelector('#accountListWrap');
-const toggleAccountListBtn = document.querySelector('#toggleAccountList');
-let accountListCollapsed = localStorage.getItem('schoolAccountListCollapsed') === '1';
-function applyAccountListCollapse() {
-  accountListWrap.classList.toggle('grid-rows-[0fr]', accountListCollapsed);
-  accountListWrap.classList.toggle('grid-rows-[1fr]', !accountListCollapsed);
-  toggleAccountListBtn.textContent = accountListCollapsed ? '▸' : '▾';
-  toggleAccountListBtn.setAttribute('aria-expanded', String(!accountListCollapsed));
+// Collapsible cards (dashboard + every admin-panel card): `data-collapsible="key"` on the
+// card, a `data-collapse-head` row with a `data-collapse-toggle` button, and the content in
+// a `data-collapse-wrap`. Open/closed is a per-device UI preference kept in localStorage.
+const collapsedState = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem('schoolCollapsed') || '{}');
+    // the account list used to have its own flag
+    if (localStorage.getItem('schoolAccountListCollapsed') === '1' && saved['admin-accounts'] === undefined) saved['admin-accounts'] = true;
+    return saved;
+  } catch { return {}; }
+})();
+function saveCollapsed() {
+  try { localStorage.setItem('schoolCollapsed', JSON.stringify(collapsedState)); } catch { /* storage unavailable */ }
 }
-applyAccountListCollapse();
-toggleAccountListBtn.addEventListener('click', () => {
-  accountListCollapsed = !accountListCollapsed;
-  localStorage.setItem('schoolAccountListCollapsed', accountListCollapsed ? '1' : '0');
-  applyAccountListCollapse();
+function setCollapsed(card, on) {
+  collapsedState[card.dataset.collapsible] = on;
+  card.classList.toggle('is-collapsed', on);
+  card.querySelector('[data-collapse-wrap]').classList.toggle('is-collapsed', on);
+  card.querySelector('[data-collapse-toggle]').setAttribute('aria-expanded', String(!on));
+}
+const adminCollapseAllBtn = document.querySelector('#adminCollapseAll');
+const adminCards = () => [...document.querySelectorAll('#admin [data-collapsible]')];
+function renderCollapseAllButton() {
+  adminCollapseAllBtn.textContent = adminCards().every((c) => c.classList.contains('is-collapsed')) ? 'Rozwiń wszystko' : 'Zwiń wszystko';
+}
+document.querySelectorAll('[data-collapsible]').forEach((card) => {
+  setCollapsed(card, !!collapsedState[card.dataset.collapsible]);
+  card.querySelector('[data-collapse-toggle]').addEventListener('click', () => {
+    setCollapsed(card, !card.classList.contains('is-collapsed'));
+    saveCollapsed();
+    renderCollapseAllButton();
+  });
 });
+adminCollapseAllBtn.addEventListener('click', () => {
+  const collapse = !adminCards().every((c) => c.classList.contains('is-collapsed'));
+  adminCards().forEach((card) => setCollapsed(card, collapse));
+  saveCollapsed();
+  renderCollapseAllButton();
+});
+renderCollapseAllButton();
 
 function renderAccounts() {
   const el = document.querySelector('#accountList');
