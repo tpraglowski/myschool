@@ -78,9 +78,9 @@ body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in 
 #seatingScreen.layout-simple .seat-left h3 { display: none; }
 #seatingScreen.layout-simple .seat-actions { justify-content: flex-start; }
 /* All tool screens: tighter page chrome so they fit one screen without scrolling. */
-body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen):not(.hidden)) main { padding-bottom: 12px; }
-body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen):not(.hidden)) header { margin-bottom: 14px; }
-:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen) > .h-\[18px\] { height: 8px; }
+body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen, #cubeScreen):not(.hidden)) main { padding-bottom: 12px; }
+body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen, #cubeScreen):not(.hidden)) header { margin-bottom: 14px; }
+:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen, #cubeScreen) > .h-\[18px\] { height: 8px; }
 
 /* Collapsible cards (dashboard, admin panel): the body slides shut via a grid-row transition. */
 .collapse-wrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .3s ease; }
@@ -175,3 +175,40 @@ body.pattern-panda {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cg fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' opacity='.35'%3E%3Ccircle cx='31' cy='30' r='11'/%3E%3Ccircle cx='65' cy='30' r='11'/%3E%3Ccircle cx='48' cy='52' r='27'/%3E%3Cellipse cx='38' cy='49' rx='8' ry='10'/%3E%3Cellipse cx='58' cy='49' rx='8' ry='10'/%3E%3Ccircle cx='48' cy='60' r='3'/%3E%3C/g%3E%3C/svg%3E");
   background-size: 96px 96px;
 }
+
+
+/* ---- Decibel meter (left edge of the screen, Ustawienia → Miernik decybeli) ---- */
+.db-meter { position: fixed; left: 6px; top: 50%; transform: translateY(-50%); z-index: 13; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 52px; height: min(60vh, 440px); padding: 8px 6px; border: 1px solid var(--line); border-radius: 16px; background: color-mix(in srgb, var(--card) 92%, transparent); box-shadow: 0 6px 20px var(--shadow); pointer-events: none; }
+.db-meter.hidden { display: none; }
+.db-readout { display: flex; flex-direction: column; align-items: center; line-height: 1; font-variant-numeric: tabular-nums; }
+.db-readout b { font-size: 1.05rem; font-weight: 800; }
+.db-readout small { font-size: .6rem; color: var(--muted); font-weight: 700; }
+.db-track { position: relative; flex: 1; width: 16px; border-radius: 999px; background: var(--line); overflow: visible; }
+.db-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0%; border-radius: 999px; background: #22c55e; transition: height .08s linear, background-color .2s; }
+.db-meter[data-level="1"] .db-fill { background: #84cc16; }
+.db-meter[data-level="2"] .db-fill { background: #f59e0b; }
+.db-meter[data-level="3"] .db-fill { background: #ef4444; }
+.db-peak { position: absolute; left: -2px; right: -2px; height: 3px; border-radius: 2px; background: var(--ink); bottom: 0%; opacity: .7; }
+.db-tick { position: absolute; left: 20px; transform: translateY(50%); font-size: .55rem; color: var(--muted); font-weight: 700; }
+.db-label { font-size: .58rem; font-weight: 800; text-align: center; line-height: 1.1; color: var(--muted); max-width: 46px; }
+@media (max-width: 1240px) { body.db-on main { margin-left: 62px; width: calc(100% - 78px); } }
+
+/* ---- Rubik's cube timer ---- */
+.cube-pad { --pc: #4f46e5; display: grid; place-items: center; align-content: center; gap: 6px; width: 100%; min-height: min(36vh, 300px); padding: 18px; border: 4px solid var(--pc); border-radius: 24px; background: color-mix(in srgb, var(--pc) 10%, var(--card)); color: var(--pc); touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; transition: background-color .12s; }
+.cube-pad.holding { background: #dc2626; border-color: #dc2626; color: #fff; }
+.cube-pad.ready { background: #16a34a; border-color: #16a34a; color: #fff; }
+.cube-display { font-size: clamp(3.2rem, 14vw, 7rem); font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.cube-hint { font-size: .8rem; font-weight: 700; opacity: .8; }
+
+/* ---- Chess clock: a full-window overlay with two big sides ---- */
+#chessScreen:not(.hidden) { position: fixed; inset: 0; z-index: 11; display: flex; flex-direction: column; background: var(--bg); }
+.chess-side { --side: #4f46e5; flex: 1; display: grid; place-items: center; align-content: center; gap: 4px; border: 0; border-radius: 0; background: color-mix(in srgb, var(--side) 20%, var(--card)); color: var(--ink); cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; transition: background-color .15s, opacity .15s; }
+.chess-top { --side: #f97316; }
+.chess-bottom { --side: #4f46e5; }
+.chess-top.rot { transform: rotate(180deg); }
+.chess-side.active { background: var(--side); color: #fff; }
+.chess-side.over { background: #dc2626; color: #fff; }
+.chess-side:disabled { cursor: default; }
+.chess-time { font-size: clamp(4rem, 22vw, 11rem); font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.chess-side small { font-size: 1rem; font-weight: 700; opacity: .85; }
+.chess-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; padding: 8px 12px; background: var(--card); border-block: 1px solid var(--line); }

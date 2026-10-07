@@ -25,7 +25,7 @@
       },
     };
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261007b" />
+  <link rel="stylesheet" href="styles.css?v=20261007c" />
 </head>
 <body class="min-h-screen bg-app font-sans text-ink transition-colors">
   <main class="mx-auto w-[calc(100%-2rem)] max-w-[1120px] pb-11 pt-7">
@@ -345,6 +345,56 @@
       </div>
     </section>
 
+    <section class="view hidden" id="cubeScreen">
+      <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="teacherTools">← Wróć</button>
+      <div class="h-[18px]"></div>
+      <div class="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <div class="rounded-[22px] border border-line bg-card p-[22px] text-center shadow-[0_7px_22px_var(--shadow)]">
+          <h2 class="mb-1 text-[1.2em] font-bold tracking-tight">Licznik do kostki Rubika</h2>
+          <p class="mb-3 font-bold" id="cubePlayerName"></p>
+          <button class="cube-pad" id="cubePad" type="button" aria-label="Pole startu i stopu">
+            <span class="cube-display" id="cubeDisplay">0.00</span>
+            <small class="cube-hint" id="cubeHint"></small>
+          </button>
+          <div class="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4" id="cubeStats"></div>
+        </div>
+        <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Zawodnicy</h3>
+          <div class="mb-3 flex flex-wrap gap-2" id="cubePlayers"></div>
+          <div class="mb-4 flex items-center gap-2">
+            <input class="min-w-0 flex-1 rounded-lg border border-line bg-app px-3 py-2 text-ink" id="cubeNewName" maxlength="24" placeholder="Imię nowego zawodnika" autocomplete="off" />
+            <input class="h-10 w-10 cursor-pointer rounded-lg border border-line p-0" id="cubeNewColor" type="color" aria-label="Kolor zawodnika" />
+            <button class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" id="cubeAdd" type="button">Dodaj</button>
+          </div>
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Ranking (najlepszy czas)</h3>
+          <ol class="mb-4 grid gap-1 text-sm" id="cubeBoard"></ol>
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted" id="cubeTimesTitle">Czasy</h3>
+          <div class="mb-3 flex flex-wrap gap-1.5 text-sm" id="cubeTimes"></div>
+          <div class="flex flex-wrap gap-2">
+            <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-muted disabled:opacity-40" id="cubeClear" type="button">Wyczyść czasy</button>
+            <button class="rounded-lg bg-app px-3 py-1.5 text-sm font-bold text-red-600 disabled:opacity-40" id="cubeRemove" type="button">Usuń zawodnika</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="chessScreen">
+      <button class="chess-side chess-top" id="chessTop" type="button" data-side="top"><span class="chess-time" id="chessTimeTop">5:00</span><small id="chessInfoTop"></small></button>
+      <div class="chess-bar">
+        <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="teacherTools">← Wróć</button>
+        <button class="rounded-xl bg-primary px-4 py-2 font-extrabold text-white" id="chessPause" type="button">Pauza</button>
+        <button class="rounded-xl bg-app px-4 py-2 font-bold text-muted" id="chessReset" type="button">Reset</button>
+        <label class="flex items-center gap-1.5 text-sm font-bold">Czas
+          <select class="rounded-lg border border-line bg-app px-2 py-1.5 text-ink" id="chessMinutes"></select>
+        </label>
+        <label class="flex items-center gap-1.5 text-sm font-bold">+ sek.
+          <select class="rounded-lg border border-line bg-app px-2 py-1.5 text-ink" id="chessIncrement"></select>
+        </label>
+        <label class="flex items-center gap-1.5 text-sm font-bold"><input type="checkbox" id="chessRotate" class="accent-primary" /> Obróć górny zegar</label>
+      </div>
+      <button class="chess-side chess-bottom" id="chessBottom" type="button" data-side="bottom"><span class="chess-time" id="chessTimeBottom">5:00</span><small id="chessInfoBottom"></small></button>
+    </section>
+
     <section class="view hidden" id="detail">
       <div class="mb-3.5 flex items-center gap-2 text-sm text-muted">
         <button class="rounded-[10px] bg-[#eef0ff] px-3.5 py-2 font-bold text-primary" data-view="competences">← Przedmioty</button>
@@ -413,6 +463,13 @@
             <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="winter"><i data-icon="snow"></i> Zima</button>
             <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="spring"><i data-icon="flower"></i> Wiosna</button>
             <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-season="summer"><i data-icon="sun"></i> Lato</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
+          <div><h2 class="text-[1.2em] font-bold tracking-tight">Miernik decybeli</h2><p class="mt-1 text-sm text-muted">Pionowy pasek po lewej stronie ekranu pokazuje, jak głośno jest wokół (z mikrofonu urządzenia, przeglądarka zapyta o zgodę). Dźwięk jest analizowany tylko na bieżąco — nie jest nagrywany ani nigdzie wysyłany. Wynik jest przybliżony.</p></div>
+          <div class="flex gap-2">
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-dbmeter="on">Włączony</button>
+            <button class="rounded-[9px] border border-line bg-app px-3 py-2 font-bold text-muted" data-dbmeter="off">Wyłączony</button>
           </div>
         </div>
         <div class="grid grid-cols-1 items-center gap-5 border-b border-line py-[18px] sm:grid-cols-[1fr_auto]">
@@ -865,6 +922,15 @@
   </div>
 
   <canvas class="pointer-events-none fixed inset-0 z-[12] hidden h-full w-full" id="seasonCanvas" aria-hidden="true"></canvas>
-  <script type="module" src="script.js?v=20261007b"></script>
+  <aside class="db-meter hidden" id="dbMeter" aria-label="Miernik decybeli" data-level="0">
+    <div class="db-readout"><b id="dbValue">--</b><small>dB</small></div>
+    <div class="db-track">
+      <div class="db-fill" id="dbFill"></div>
+      <div class="db-peak" id="dbPeak"></div>
+      <span class="db-tick" style="bottom:28.5%">50</span><span class="db-tick" style="bottom:57%">70</span><span class="db-tick" style="bottom:85.5%">90</span>
+    </div>
+    <div class="db-label" id="dbLabel">Cicho</div>
+  </aside>
+  <script type="module" src="script.js?v=20261007c"></script>
 </body>
 </html>

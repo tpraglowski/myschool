@@ -32,6 +32,8 @@ const ICONS = {
   alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   expand: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
   shrink: '<path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/>',
+  cube: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+  swap: '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
   undo: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
   redo: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
@@ -188,6 +190,8 @@ const state = {
   lessonIsPersonal: false,
   timerRuntime: {},
   activeTimerTool: null,
+  activeCube: null,
+  activeChess: null,
   activeTool: null,
   pickerResult: {},
   groupsResult: {},
@@ -492,7 +496,7 @@ function setSelected(el, isSelected, onClasses, offClasses) {
 }
 
 // ---------- Navigation ----------
-const navParent = { schedule: 'home', changes: 'home', events: 'home', admin: 'home', detail: 'competences', timerScreen: 'teacherTools', pickerScreen: 'teacherTools', groupsScreen: 'teacherTools', seatingScreen: 'teacherTools' };
+const navParent = { schedule: 'home', changes: 'home', events: 'home', admin: 'home', detail: 'competences', timerScreen: 'teacherTools', cubeScreen: 'teacherTools', chessScreen: 'teacherTools', pickerScreen: 'teacherTools', groupsScreen: 'teacherTools', seatingScreen: 'teacherTools' };
 function show(id) {
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== id));
   // The thanks footer belongs to the main ("Główne") tab only.
@@ -517,6 +521,8 @@ function show(id) {
   }
   updateToolsNav(id);
   if (id !== 'seatingScreen') leaveSeatFullscreen();
+  if (id !== 'chessScreen') chessStop();
+  if (id !== 'cubeScreen') cubeCancel();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 window.show = show;
@@ -1649,6 +1655,91 @@ document.querySelectorAll('[data-accent]').forEach((b) => b.addEventListener('cl
   persistUserSettings();
 }));
 
+// ---------- Decibel meter ----------
+// A vertical bar on the left edge of the screen showing how loud it is, from the device's
+// microphone. The sound is only measured (RMS of the live signal) — never recorded or sent
+// anywhere. The dB value is approximate: browsers don't expose the real sensitivity of a
+// microphone, so a typical offset is used (quiet room ≈ 35 dB, loud talking ≈ 70 dB).
+const dbMeterEl = document.querySelector('#dbMeter');
+const DB_MIN = 30;
+const DB_MAX = 100;
+const DB_OFFSET = 94;
+const meter = { ctx: null, stream: null, analyser: null, buf: null, timer: 0, level: DB_MIN, peak: DB_MIN, peakAt: 0 };
+function renderDbMeter(value, message) {
+  const fill = dbMeterEl.querySelector('#dbFill');
+  const peak = dbMeterEl.querySelector('#dbPeak');
+  if (value === null) {
+    dbMeterEl.querySelector('#dbValue').textContent = '--';
+    dbMeterEl.querySelector('#dbLabel').textContent = message || '';
+    fill.style.height = '0%';
+    peak.style.bottom = '0%';
+    return;
+  }
+  const pct = (v) => ((v - DB_MIN) / (DB_MAX - DB_MIN)) * 100;
+  const level = value < 45 ? 0 : value < 60 ? 1 : value < 75 ? 2 : 3;
+  dbMeterEl.dataset.level = String(level);
+  dbMeterEl.querySelector('#dbValue').textContent = String(Math.round(value));
+  dbMeterEl.querySelector('#dbLabel').textContent = ['Cicho', 'Spokojnie', 'Głośno', 'Bardzo głośno'][level];
+  fill.style.height = `${pct(value).toFixed(1)}%`;
+  peak.style.bottom = `${Math.max(0, pct(meter.peak) - 1).toFixed(1)}%`;
+}
+function sampleDbMeter() {
+  if (!meter.analyser) return;
+  if (meter.ctx.state === 'suspended') meter.ctx.resume().catch(() => {});
+  meter.analyser.getFloatTimeDomainData(meter.buf);
+  let sum = 0;
+  for (let i = 0; i < meter.buf.length; i++) sum += meter.buf[i] * meter.buf[i];
+  const rms = Math.sqrt(sum / meter.buf.length);
+  const spl = Math.min(DB_MAX, Math.max(DB_MIN, 20 * Math.log10(Math.max(rms, 1e-7)) + DB_OFFSET));
+  meter.level = spl > meter.level ? spl : Math.max(spl, meter.level - 1.5); // fast attack, slow fall
+  const now = performance.now();
+  if (meter.level >= meter.peak || now - meter.peakAt > 1500) { meter.peak = meter.level; meter.peakAt = now; }
+  renderDbMeter(meter.level);
+}
+async function startDbMeter() {
+  if (meter.stream) return;
+  dbMeterEl.classList.remove('hidden');
+  renderDbMeter(null, 'Czekam na mikrofon…');
+  if (!navigator.mediaDevices?.getUserMedia) { renderDbMeter(null, 'Mikrofon niedostępny'); return; }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch {
+    if (document.body.classList.contains('db-on')) renderDbMeter(null, 'Brak dostępu do mikrofonu');
+    return;
+  }
+  if (!document.body.classList.contains('db-on') || meter.stream) { stream.getTracks().forEach((t) => t.stop()); return; } // switched off while the browser was asking
+  meter.stream = stream;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  meter.ctx = new AudioCtx();
+  meter.analyser = meter.ctx.createAnalyser();
+  meter.analyser.fftSize = 2048;
+  meter.ctx.createMediaStreamSource(stream).connect(meter.analyser);
+  meter.buf = new Float32Array(meter.analyser.fftSize);
+  meter.level = meter.peak = DB_MIN;
+  meter.timer = setInterval(sampleDbMeter, 80);
+}
+function stopDbMeter() {
+  clearInterval(meter.timer);
+  meter.timer = 0;
+  meter.stream?.getTracks().forEach((t) => t.stop());
+  meter.ctx?.close().catch(() => {});
+  Object.assign(meter, { ctx: null, stream: null, analyser: null, buf: null });
+  dbMeterEl.classList.add('hidden');
+}
+function applyDbMeter(on) {
+  document.body.classList.toggle('db-on', on);
+  document.querySelectorAll('[data-dbmeter]').forEach((x) => setSelected(x, x.dataset.dbmeter === (on ? 'on' : 'off'), ['bg-primary', 'text-white', 'border-primary'], ['bg-app', 'text-muted', 'border-line']));
+  if (on) startDbMeter(); else stopDbMeter();
+}
+applyDbMeter(localStorage.getItem('schoolDbMeter') === 'on');
+document.querySelectorAll('[data-dbmeter]').forEach((b) => b.addEventListener('click', () => {
+  const on = b.dataset.dbmeter === 'on';
+  localStorage.setItem('schoolDbMeter', on ? 'on' : 'off');
+  applyDbMeter(on);
+  persistUserSettings();
+}));
+
 function currentSettingsSnapshot() {
   return {
     fontSize: Number(localStorage.getItem('schoolFontSize')) || 16,
@@ -1659,6 +1750,7 @@ function currentSettingsSnapshot() {
     radius: localStorage.getItem('schoolRadius') || 'large',
     accent: localStorage.getItem('schoolAccent') || '#4f46e5',
     season: localStorage.getItem('schoolSeason') || 'off',
+    dbMeter: localStorage.getItem('schoolDbMeter') === 'on',
   };
 }
 function persistUserSettings() {
@@ -1679,6 +1771,7 @@ function applyAccountSettings(settings) {
   localStorage.setItem('schoolRadius', settings.radius || 'large');
   localStorage.setItem('schoolAccent', settings.accent || '#4f46e5');
   localStorage.setItem('schoolSeason', settings.season || 'off');
+  localStorage.setItem('schoolDbMeter', settings.dbMeter ? 'on' : 'off');
   applyFontSize(settings.fontSize || 16);
   applyBg(settings.bg || '#f5f7ff');
   applyMode(settings.mode || 'auto');
@@ -1687,6 +1780,7 @@ function applyAccountSettings(settings) {
   applyRadius(settings.radius || 'large');
   applyAccent(settings.accent || '#4f46e5');
   applySeason(settings.season || 'off');
+  applyDbMeter(!!settings.dbMeter);
 }
 
 // ---------- Password hashing ----------
@@ -1795,6 +1889,11 @@ function logout(message) {
     const el = document.querySelector(sel);
     if (el) el.innerHTML = '';
   });
+  stopDbMeter();
+  chessStop();
+  cubeCancel();
+  state.activeCube = null;
+  state.activeChess = null;
   state.timerRuntime = {};
   state.activeTimerTool = null;
   state.activeTool = null;
@@ -1816,6 +1915,7 @@ function finishLogin(user) {
   state.viewingClassroom = accessibleClasses(currentUser)[0];
   document.querySelector('#loginLayer').classList.add('hidden');
   applyAccountSettings(user.settings);
+  if (!user.settings) applyDbMeter(localStorage.getItem('schoolDbMeter') === 'on');
   persistUserSettings();
   setupUserInterface();
 }
@@ -2145,9 +2245,16 @@ const toolTypes = [
   { type: 'groups', icon: 'users', name: 'Losowanie grup', description: 'Dzieli klasę na grupy, z możliwością rozdzielenia wybranych osób' },
   { type: 'seating', icon: 'seat', name: 'Rozsadzanie osób', description: 'Losowo sadza klasę przy stolikach (miejsca, ławki): własny układ stolików, wybrany rząd dla osoby i „nie obok”' },
 ];
+// Tools with `pinnable: false` (the extra ones) are listed at the bottom of Teacher Tools
+// under a divider and can't be pinned.
+toolTypes.push(
+  { type: 'cube', icon: 'cube', name: 'Licznik do kostki Rubika', pinnable: false, description: 'Pomiar czasu układania kostki dla wielu zawodników, każdy ma swój kolor i ranking' },
+  { type: 'chess', icon: 'swap', name: 'Zegar szachowy', pinnable: false, description: 'Dwa zegary na pełnym ekranie: dotknij swojej strony, żeby oddać ruch' },
+);
+const toolPinnable = (tool) => toolTypeInfo(tool.type).pinnable !== false;
 const toolTypeInfo = (type) => toolTypes.find((t) => t.type === type) || toolTypes[0];
 // The random-person tool always keeps its own name; the others can be renamed.
-const toolDisplayName = (tool) => (tool.type === 'picker' ? toolTypeInfo('picker').name : (tool.label || toolTypeInfo(tool.type).name));
+const toolDisplayName = (tool) => (['picker', 'cube', 'chess'].includes(tool.type) ? toolTypeInfo(tool.type).name : (tool.label || toolTypeInfo(tool.type).name));
 // Every teacher always has every tool: they are added automatically (see
 // ensureDefaultTools) and cannot be deleted — only renamed, pinned and configured.
 function makeTool(type) {
@@ -2157,6 +2264,8 @@ function makeTool(type) {
   if (type === 'picker' || type === 'groups' || type === 'seating') tool.classId = teacherClasses().length === 1 ? teacherClasses()[0].id : null;
   if (type === 'seating') Object.assign(tool, { desks: defaultDesks(), seatPlans: {} });
   if (type === 'groups') Object.assign(tool, { groupMode: 'count', groupValue: 2 });
+  if (type === 'cube') Object.assign(tool, { participants: [{ id: crypto.randomUUID(), name: 'Zawodnik 1', color: CUBE_COLORS[0], times: [] }], activeParticipant: null });
+  if (type === 'chess') Object.assign(tool, { minutes: 5, increment: 0, rotateTop: true });
   return tool;
 }
 // Adds whichever default tools are missing (new teachers, and any tool type added to the
@@ -2177,6 +2286,9 @@ function ensureDefaultTools() {
       if (!t.seatPlans || typeof t.seatPlans !== 'object') { t.seatPlans = {}; changed = true; }
     }
     if (t.type === 'groups' && !(t.groupValue >= 1)) { Object.assign(t, { groupMode: 'count', groupValue: 2 }); changed = true; }
+    if (t.type === 'cube' && (!Array.isArray(t.participants) || !t.participants.length)) { Object.assign(t, makeTool('cube'), { id: t.id, label: t.label }); changed = true; }
+    if (t.type === 'chess' && !(t.minutes > 0)) { Object.assign(t, { minutes: 5, increment: 0, rotateTop: true }); changed = true; }
+    if (!toolPinnable(t) && t.pinned) { t.pinned = false; changed = true; }
   });
   if (changed) saveTeacherTools();
 }
@@ -2192,7 +2304,7 @@ function toolTileHtml(tool) {
   const info = toolTypeInfo(tool.type);
   return `<button type="button" class="relative min-h-[140px] rounded-[20px] border bg-card p-5 text-left shadow-[0_7px_22px_var(--shadow)] transition hover:-translate-y-1 hover:shadow-lg ${tool.pinned ? 'border-primary' : 'border-line'}" data-open-tool="${tool.id}">
     <span class="absolute right-3 top-3 z-10 flex gap-1.5">
-      ${tileButton(`data-pin-tool="${tool.id}"`, tool.pinned ? 'Odepnij' : 'Przypnij', icon('pin'), tool.pinned ? 'bg-primary text-white' : 'opacity-60')}
+      ${toolPinnable(tool) ? tileButton(`data-pin-tool="${tool.id}"`, tool.pinned ? 'Odepnij' : 'Przypnij', icon('pin'), tool.pinned ? 'bg-primary text-white' : 'opacity-60') : ''}
       ${tool.type === 'seating' ? tileButton(`data-settings-tool="${tool.id}"`, 'Ustawienia rozsadzania', icon('gear')) : ''}
     </span>
     <span class="mb-3 grid h-10 w-10 place-items-center rounded-xl bg-app text-xl">${icon(info.icon)}</span>
@@ -2206,10 +2318,13 @@ function openTool(id) {
   if (tool.type === 'picker') openPickerScreen(id);
   else if (tool.type === 'groups') openGroupsScreen(id);
   else if (tool.type === 'seating') openSeatingScreen(id);
+  else if (tool.type === 'cube') openCubeScreen(id);
+  else if (tool.type === 'chess') openChessScreen(id);
   else openTimerScreen(id);
 }
 // At most MAX_PINNED_TOOLS tools can be pinned; pinned ones are listed first.
 function setPinned(tool, pinned) {
+  if (!toolPinnable(tool)) return true;
   if (pinned && !tool.pinned && pinnedCount() >= MAX_PINNED_TOOLS) return false;
   tool.pinned = pinned;
   saveTeacherTools();
@@ -2239,14 +2354,21 @@ function bindTeacherToolsEvents(el) {
   el.querySelectorAll('[data-open-tool]').forEach((b) => b.addEventListener('click', () => openTool(b.dataset.openTool)));
 }
 const toolSectionTitle = (text) => `<h3 class="col-span-full text-sm font-bold uppercase tracking-wide text-muted">${text}</h3>`;
-function renderToolSections(tools) {
+function renderToolSections(allTools) {
+  const tools = allTools.filter(toolPinnable);
+  const extras = allTools.filter((t) => !toolPinnable(t));
   const pinned = tools.filter((t) => t.pinned);
-  if (!pinned.length) return tools.map((t) => toolTileHtml(t)).join('');
   const rest = tools.filter((t) => !t.pinned);
-  return toolSectionTitle(`${icon('pin')} Przypięte (${pinned.length}/${MAX_PINNED_TOOLS})`)
-    + pinned.map((t) => toolTileHtml(t)).join('')
-    + (rest.length ? toolSectionTitle('Pozostałe narzędzia') : '')
-    + rest.map((t) => toolTileHtml(t)).join('');
+  const main = !pinned.length
+    ? tools.map((t) => toolTileHtml(t)).join('')
+    : toolSectionTitle(`${icon('pin')} Przypięte (${pinned.length}/${MAX_PINNED_TOOLS})`)
+      + pinned.map((t) => toolTileHtml(t)).join('')
+      + (rest.length ? toolSectionTitle('Pozostałe narzędzia') : '')
+      + rest.map((t) => toolTileHtml(t)).join('');
+  const extra = extras.length
+    ? `<hr class="col-span-full my-2 border-t-2 border-line" />${toolSectionTitle('Dodatkowe narzędzia — bez przypinania')}${extras.map((t) => toolTileHtml(t)).join('')}`
+    : '';
+  return main + extra;
 }
 // Settings dialog of the seating tool. They belong to the tool and hold for every class
 // (never for just the one class that happens to be selected). Everything applies
@@ -3560,6 +3682,293 @@ const endSeatDrag = () => {
 };
 seatBoardEl.addEventListener('pointerup', endSeatDrag);
 seatBoardEl.addEventListener('pointercancel', endSeatDrag);
+
+// ---------- Extra tool: Rubik's cube timer ----------
+// Several competitors, each with their own colour, times and a ranking by best time.
+// Hold the pad (or Space) until it turns green, release to start, touch again to stop —
+// like a speedcubing timer. Everything is stored on the teacher's own account.
+const CUBE_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#84cc16', '#f43f5e', '#a855f7'];
+const CUBE_MAX_PLAYERS = 12;
+const cubeTool = () => teacherToolsFor().find((t) => t.id === state.activeCube);
+const cubePlayer = (tool) => tool.participants.find((p) => p.id === tool.activeParticipant) || tool.participants[0];
+function formatCube(ms) {
+  const total = Math.max(0, Math.round(ms / 10));
+  const cs = String(total % 100).padStart(2, '0');
+  const sec = Math.floor(total / 100) % 60;
+  const min = Math.floor(total / 6000);
+  return min ? `${min}:${String(sec).padStart(2, '0')}.${cs}` : `${sec}.${cs}`;
+}
+const cubeRun = { phase: 'idle', t0: 0, raf: 0, hold: 0, armed: null };
+const cubePadEl = document.querySelector('#cubePad');
+const CUBE_HINTS = { idle: 'Przytrzymaj pole (lub spację), aż zzielenieje — puść, żeby zacząć', holding: 'Trzymaj…', ready: 'Puść, żeby zacząć!', running: 'Dotknij, żeby zatrzymać' };
+function cubeSetPhase(phase) {
+  cubeRun.phase = phase;
+  cubePadEl.classList.toggle('holding', phase === 'holding');
+  cubePadEl.classList.toggle('ready', phase === 'ready');
+  document.querySelector('#cubeHint').textContent = CUBE_HINTS[phase];
+}
+function cubeCancel() {
+  clearTimeout(cubeRun.hold);
+  cancelAnimationFrame(cubeRun.raf);
+  cubeRun.phase = 'idle';
+  cubePadEl.classList.remove('holding', 'ready');
+}
+function cubeStats(times) {
+  if (!times.length) return { best: null, last: null, ao5: null, mean: null };
+  const last5 = times.slice(-5);
+  let ao5 = null;
+  if (last5.length === 5) {
+    const sorted = [...last5].sort((a, b) => a - b);
+    ao5 = (sorted[1] + sorted[2] + sorted[3]) / 3;
+  }
+  return { best: Math.min(...times), last: times[times.length - 1], ao5, mean: times.reduce((a, b) => a + b, 0) / times.length };
+}
+function renderCube() {
+  const tool = cubeTool();
+  if (!tool) return;
+  const player = cubePlayer(tool);
+  tool.activeParticipant = player.id;
+  cubePadEl.style.setProperty('--pc', player.color);
+  document.querySelector('#cubePlayerName').innerHTML = `<span class="inline-block h-3 w-3 rounded-full align-baseline" style="background:${player.color}"></span> ${escapeHtml(player.name)}`;
+  if (cubeRun.phase !== 'running') document.querySelector('#cubeDisplay').textContent = formatCube(player.times[player.times.length - 1] || 0);
+  cubeSetPhase(cubeRun.phase);
+  const st = cubeStats(player.times);
+  const stat = (label, value) => `<div class="rounded-xl bg-app px-2 py-2"><span class="block text-xs text-muted">${label}</span><b>${value === null ? '—' : formatCube(value)}</b></div>`;
+  document.querySelector('#cubeStats').innerHTML = stat('Najlepszy', st.best) + stat('Ostatni', st.last) + stat('Średnia z 5', st.ao5) + stat('Średnia', st.mean);
+  document.querySelector('#cubePlayers').innerHTML = tool.participants.map((p) =>
+    `<button type="button" class="inline-flex items-center gap-1.5 rounded-lg border-2 px-2.5 py-1 text-sm font-bold" style="border-color:${p.color};${p.id === player.id ? `background:${p.color};color:#fff` : ''}" data-cube-player="${p.id}">${escapeHtml(p.name)}</button>`).join('');
+  const ranked = tool.participants.map((p) => ({ p, best: p.times.length ? Math.min(...p.times) : null })).filter((x) => x.best !== null).sort((a, b) => a.best - b.best);
+  document.querySelector('#cubeBoard').innerHTML = ranked.length
+    ? ranked.map((x, i) => `<li class="flex items-center gap-2 rounded-lg bg-app px-2.5 py-1.5"><b class="w-5 text-muted">${i + 1}.</b><span class="h-3 w-3 shrink-0 rounded-full" style="background:${x.p.color}"></span><span class="min-w-0 flex-1 truncate font-bold">${escapeHtml(x.p.name)}</span><b class="tabular-nums">${formatCube(x.best)}</b></li>`).join('')
+    : '<li class="text-muted">Brak czasów.</li>';
+  document.querySelector('#cubeTimesTitle').textContent = `Czasy: ${player.name}`;
+  const recent = player.times.map((t, i) => ({ t, i })).slice(-14).reverse();
+  document.querySelector('#cubeTimes').innerHTML = recent.length
+    ? recent.map(({ t, i }) => `<span class="inline-flex items-center gap-1 rounded-lg bg-app px-2 py-1 font-bold tabular-nums" style="border-left:4px solid ${player.color}">${formatCube(t)}<button type="button" class="text-muted" data-cube-del-time="${i}" aria-label="Usuń czas">×</button></span>`).join('')
+    : '<span class="text-muted">Jeszcze nie ma czasów.</span>';
+  document.querySelector('#cubeClear').disabled = !player.times.length;
+  document.querySelector('#cubeRemove').disabled = tool.participants.length < 2;
+}
+function cubeLoop() {
+  if (cubeRun.phase !== 'running') return;
+  document.querySelector('#cubeDisplay').textContent = formatCube(performance.now() - cubeRun.t0);
+  cubeRun.raf = requestAnimationFrame(cubeLoop);
+}
+function cubeStart() {
+  cubeRun.t0 = performance.now();
+  cubeSetPhase('running');
+  cubeLoop();
+}
+function cubeStop() {
+  const tool = cubeTool();
+  const elapsed = performance.now() - cubeRun.t0;
+  cancelAnimationFrame(cubeRun.raf);
+  cubeSetPhase('idle');
+  if (!tool) return;
+  const player = cubePlayer(tool);
+  player.times.push(Math.round(elapsed));
+  if (player.times.length > 300) player.times.splice(0, player.times.length - 300);
+  saveTeacherTools();
+  renderCube();
+  document.querySelector('#cubeDisplay').textContent = formatCube(elapsed);
+}
+function cubePress() {
+  if (!cubeTool()) return;
+  if (cubeRun.phase === 'running') { cubeStop(); return; }
+  if (cubeRun.phase !== 'idle') return;
+  cubeSetPhase('holding');
+  cubeRun.hold = setTimeout(() => { if (cubeRun.phase === 'holding') cubeSetPhase('ready'); }, 300);
+}
+function cubeRelease() {
+  clearTimeout(cubeRun.hold);
+  if (cubeRun.phase === 'ready') cubeStart();
+  else if (cubeRun.phase === 'holding') cubeSetPhase('idle');
+}
+cubePadEl.addEventListener('pointerdown', (e) => { e.preventDefault(); cubePress(); });
+cubePadEl.addEventListener('pointerup', cubeRelease);
+cubePadEl.addEventListener('pointercancel', () => { clearTimeout(cubeRun.hold); if (cubeRun.phase === 'holding' || cubeRun.phase === 'ready') cubeSetPhase('idle'); });
+const cubeKeyTarget = (e) => !document.querySelector('#cubeScreen').classList.contains('hidden') && e.code === 'Space' && !e.target.closest?.('input, textarea, select') && !(e.target.closest?.('button') && e.target !== cubePadEl);
+document.addEventListener('keydown', (e) => { if (cubeKeyTarget(e)) { e.preventDefault(); if (!e.repeat) cubePress(); } });
+document.addEventListener('keyup', (e) => { if (cubeKeyTarget(e)) { e.preventDefault(); cubeRelease(); } });
+// Two-step buttons (first click arms for 4 s, second confirms) — no native dialogs.
+function twoStep(button, idleText, armedText, action) {
+  let timer = null;
+  const reset = () => { clearTimeout(timer); timer = null; button.textContent = idleText; };
+  button.addEventListener('click', () => {
+    if (!timer) { button.textContent = armedText; timer = setTimeout(reset, 4000); return; }
+    reset();
+    action();
+  });
+}
+document.querySelector('#cubePlayers').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-cube-player]');
+  const tool = cubeTool();
+  if (!b || !tool || cubeRun.phase === 'running') return;
+  tool.activeParticipant = b.dataset.cubePlayer;
+  saveTeacherTools();
+  renderCube();
+});
+document.querySelector('#cubeTimes').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-cube-del-time]');
+  const tool = cubeTool();
+  if (!b || !tool) return;
+  cubePlayer(tool).times.splice(Number(b.dataset.cubeDelTime), 1);
+  saveTeacherTools();
+  renderCube();
+});
+document.querySelector('#cubeAdd').addEventListener('click', () => {
+  const tool = cubeTool();
+  if (!tool || tool.participants.length >= CUBE_MAX_PLAYERS) return;
+  const input = document.querySelector('#cubeNewName');
+  const name = capitalize(input.value.trim()) || `Zawodnik ${tool.participants.length + 1}`;
+  const player = { id: crypto.randomUUID(), name, color: document.querySelector('#cubeNewColor').value, times: [] };
+  tool.participants.push(player);
+  tool.activeParticipant = player.id;
+  input.value = '';
+  document.querySelector('#cubeNewColor').value = CUBE_COLORS[tool.participants.length % CUBE_COLORS.length];
+  saveTeacherTools();
+  renderCube();
+});
+document.querySelector('#cubeNewName').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.querySelector('#cubeAdd').click(); });
+twoStep(document.querySelector('#cubeClear'), 'Wyczyść czasy', 'Na pewno? Kliknij ponownie', () => {
+  const tool = cubeTool();
+  if (!tool) return;
+  cubePlayer(tool).times = [];
+  saveTeacherTools();
+  renderCube();
+});
+twoStep(document.querySelector('#cubeRemove'), 'Usuń zawodnika', 'Na pewno? Kliknij ponownie', () => {
+  const tool = cubeTool();
+  if (!tool || tool.participants.length < 2) return;
+  const gone = cubePlayer(tool);
+  tool.participants = tool.participants.filter((p) => p.id !== gone.id);
+  tool.activeParticipant = tool.participants[0].id;
+  saveTeacherTools();
+  renderCube();
+});
+function openCubeScreen(id) {
+  state.activeCube = id;
+  const tool = cubeTool();
+  if (!tool) return;
+  cubeCancel();
+  document.querySelector('#cubeNewColor').value = CUBE_COLORS[tool.participants.length % CUBE_COLORS.length];
+  renderCube();
+  show('cubeScreen');
+}
+
+// ---------- Extra tool: chess clock ----------
+// Two big halves; the side whose clock is running is lit. Tap YOUR side to end your move:
+// your clock stops (+ the increment) and the opponent's starts. The first tap of a game
+// starts the other side's clock. The top half can be turned upside down for the player
+// sitting opposite. Time and increment are remembered on the tool.
+const chess = { running: false, active: null, remaining: { top: 0, bottom: 0 }, moves: { top: 0, bottom: 0 }, over: null, last: 0, timer: 0, wake: null };
+const chessTool = () => teacherToolsFor().find((t) => t.id === state.activeChess);
+function formatClock(ms) {
+  const m = Math.max(0, ms);
+  if (m < 20000) return `0:${(Math.floor(m / 100) / 10).toFixed(1).padStart(4, '0')}`;
+  const total = Math.ceil(m / 1000);
+  const h = Math.floor(total / 3600);
+  const min = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  return h ? `${h}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${min}:${String(sec).padStart(2, '0')}`;
+}
+function renderChess() {
+  const tool = chessTool();
+  if (!tool) return;
+  ['top', 'bottom'].forEach((side) => {
+    const el = document.querySelector(`#chess${side === 'top' ? 'Top' : 'Bottom'}`);
+    el.classList.toggle('active', chess.active === side && chess.running && !chess.over);
+    el.classList.toggle('over', chess.over === side);
+    el.querySelector('.chess-time').textContent = formatClock(chess.remaining[side]);
+    const info = document.querySelector(`#chessInfo${side === 'top' ? 'Top' : 'Bottom'}`);
+    info.textContent = chess.over === side ? 'Koniec czasu!' : `Ruchy: ${chess.moves[side]}`;
+    el.disabled = !!chess.over;
+  });
+  document.querySelector('#chessTop').classList.toggle('rot', !!tool.rotateTop);
+  const pause = document.querySelector('#chessPause');
+  pause.textContent = chess.running ? 'Pauza' : (chess.active && !chess.over ? 'Wznów' : 'Pauza');
+  pause.disabled = !chess.active || !!chess.over;
+  document.querySelector('#chessRotate').checked = !!tool.rotateTop;
+  document.querySelector('#chessMinutes').value = String(tool.minutes);
+  document.querySelector('#chessIncrement').value = String(tool.increment || 0);
+}
+function chessTick() {
+  if (!chess.running || !chess.active) return;
+  const now = performance.now();
+  chess.remaining[chess.active] -= now - chess.last;
+  chess.last = now;
+  if (chess.remaining[chess.active] <= 0) {
+    chess.remaining[chess.active] = 0;
+    chess.over = chess.active;
+    chessStop(true);
+  }
+  renderChess();
+}
+async function chessWakeLock(on) {
+  try {
+    if (on && navigator.wakeLock && !chess.wake) chess.wake = await navigator.wakeLock.request('screen');
+    else if (!on && chess.wake) { await chess.wake.release(); chess.wake = null; }
+  } catch { chess.wake = null; }
+}
+// Stops the ticking (leaving the screen, logging out, time up). keepState keeps the board.
+function chessStop(keepState = false) {
+  clearInterval(chess.timer);
+  chess.timer = 0;
+  chess.running = false;
+  chessWakeLock(false);
+  if (!keepState) { chess.active = null; chess.over = null; }
+}
+function chessResume() {
+  chess.running = true;
+  chess.last = performance.now();
+  clearInterval(chess.timer);
+  chess.timer = setInterval(chessTick, 50);
+  chessWakeLock(true);
+}
+function chessReset() {
+  const tool = chessTool();
+  if (!tool) return;
+  chessStop();
+  const ms = tool.minutes * 60000;
+  chess.remaining = { top: ms, bottom: ms };
+  chess.moves = { top: 0, bottom: 0 };
+  renderChess();
+}
+function chessTap(side) {
+  const tool = chessTool();
+  if (!tool || chess.over) return;
+  const other = side === 'top' ? 'bottom' : 'top';
+  if (!chess.active) {                    // very first tap: the opponent's clock starts
+    chess.moves[side]++;
+    chess.remaining[side] += (tool.increment || 0) * 1000;
+    chess.active = other;
+    chessResume();
+  } else if (chess.running && chess.active === side) {
+    chess.remaining[side] += (tool.increment || 0) * 1000;
+    chess.moves[side]++;
+    chess.active = other;
+    chess.last = performance.now();
+  }
+  renderChess();
+}
+document.querySelectorAll('.chess-side').forEach((el) => el.addEventListener('click', () => chessTap(el.dataset.side)));
+document.querySelector('#chessPause').addEventListener('click', () => {
+  if (!chess.active || chess.over) return;
+  if (chess.running) { chessTick(); chessStop(true); } else chessResume();
+  renderChess();
+});
+document.querySelector('#chessReset').addEventListener('click', chessReset);
+document.querySelector('#chessMinutes').innerHTML = [1, 2, 3, 5, 10, 15, 30, 45, 60, 90].map((m) => `<option value="${m}">${m} min</option>`).join('');
+document.querySelector('#chessIncrement').innerHTML = [0, 1, 2, 3, 5, 10, 15, 30].map((n) => `<option value="${n}">${n}</option>`).join('');
+document.querySelector('#chessMinutes').addEventListener('change', (e) => { const t = chessTool(); if (!t) return; t.minutes = Number(e.target.value); saveTeacherTools(); chessReset(); });
+document.querySelector('#chessIncrement').addEventListener('change', (e) => { const t = chessTool(); if (!t) return; t.increment = Number(e.target.value); saveTeacherTools(); renderChess(); });
+document.querySelector('#chessRotate').addEventListener('change', (e) => { const t = chessTool(); if (!t) return; t.rotateTop = e.target.checked; saveTeacherTools(); renderChess(); });
+function openChessScreen(id) {
+  state.activeChess = id;
+  if (!chessTool()) return;
+  chessReset();
+  show('chessScreen');
+}
 
 // Shows the remaining time for whichever timer is currently running, right under the
 // logo, so it stays visible no matter which screen the teacher is on — not just while
