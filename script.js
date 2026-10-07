@@ -103,10 +103,22 @@ const defaultAnnouncements = [
 ];
 const classCodes = [1, 2, 3, 4, 5, 6, 7, 8].flatMap((n) => ['A', 'B', 'C'].map((letter) => `${n}${letter}`));
 const classOptionsHtml = classCodes.map((c) => `<option value="${c}">${c}</option>`).join('');
-const classroomOptionsHtml = (includeAll) => (includeAll ? '<option value="all">Wszystkie klasy</option>' : '') + classOptionsHtml;
-const classLabel = (cls) => (cls === 'all' ? 'Wszystkie klasy' : cls);
+// An announcement's "classroom" is one class code ('4A'), 'all', or a group of grades:
+// 'grade:7' (every 7th class) or 'grade:4-8' (every class from grade 4 to 8).
 const gradeNumbers = [1, 2, 3, 4, 5, 6, 7, 8];
 const gradeOfClass = (cls) => cls.slice(0, -1);
+const gradeScopes = [{ value: 'grade:4-8', label: 'Klasy 4–8' }, ...gradeNumbers.map((n) => ({ value: `grade:${n}`, label: `Klasy ${n}` }))];
+const classroomOptionsHtml = (includeAll) => (includeAll
+  ? `<option value="all">Wszystkie klasy</option>${gradeScopes.map((g) => `<option value="${g.value}">${g.label}</option>`).join('')}`
+  : '') + classOptionsHtml;
+const classLabel = (cls) => (cls === 'all' ? 'Wszystkie klasy' : gradeScopes.find((g) => g.value === cls)?.label || cls);
+function classroomMatches(value, cls) {
+  if (!value || value === 'all' || value === cls) return true;
+  const m = /^grade:(\d)(?:-(\d))?$/.exec(value);
+  if (!m || !cls) return false;
+  const grade = Number(gradeOfClass(cls));
+  return grade >= Number(m[1]) && grade <= Number(m[2] || m[1]);
+}
 const gradeTabItems = gradeNumbers.map((n) => ({ code: String(n), label: `Klasa ${n}` }));
 
 // One-time fallback seed used only if a document doesn't exist yet in Firestore (brand new
@@ -275,7 +287,7 @@ function notificationsForUser(user) {
   return state.notifications.filter((n) => (
     n.targetUser
       ? normalise(n.targetUser) === normalise(user.name)
-      : !n.classroom || n.classroom === 'all' || classes.includes(n.classroom)
+      : classes.some((c) => classroomMatches(n.classroom, c)) || classroomMatches(n.classroom, null)
   ));
 }
 function renderNotifications() {
@@ -788,6 +800,7 @@ function openEditor(mode, announcementId = null, target = 'class') {
   document.querySelector('#itemDateTimeField').classList.toggle('hidden', !showDateTime);
   document.querySelector('#itemDate').value = existing?.date || '';
   document.querySelector('#itemTime').value = existing?.time || '';
+  document.querySelector('#itemEndDate').value = existing?.endDate || '';
 
   const showClassroomPicker = isAnnouncement && (!isReplacement || admin);
   const classroomField = document.querySelector('#announcementClassroomField');
@@ -840,14 +853,16 @@ dialog.addEventListener('close', () => {
     const type = isReplacement ? 'replacement' : document.querySelector('#announcementType').value;
     const date = isReplacement ? '' : document.querySelector('#itemDate').value;
     const time = isReplacement ? '' : document.querySelector('#itemTime').value;
+    const endInput = isReplacement ? '' : document.querySelector('#itemEndDate').value;
+    const endDate = endInput && date && endInput > date ? endInput : '';
     const pending = isReplacement && !admin;
 
     if (state.editAnnouncement) {
       const item = state.announcements.find((x) => x.id === state.editAnnouncement);
-      Object.assign(item, { title: name, text, lessonId, type, classroom, date, time });
+      Object.assign(item, { title: name, text, lessonId, type, classroom, date, time, endDate });
       if (isReplacement) item.pending = pending;
     } else {
-      state.announcements.push({ id: crypto.randomUUID(), title: name, text, lessonId, type, classroom, date, time, pending, createdBy: currentUser?.name || '' });
+      state.announcements.push({ id: crypto.randomUUID(), title: name, text, lessonId, type, classroom, date, time, endDate, pending, createdBy: currentUser?.name || '' });
       if (isReplacement && !pending) {
         pushNotification({ title: 'Plan lekcji został zmieniony', text: `Zastępstwo: ${name}`, classroom, type: 'schedule' });
       } else if (!isReplacement) {
@@ -1165,12 +1180,12 @@ function renderUpcomingEventsCard() {
   const cls = viewingClass();
   const todayStr = new Date().toISOString().slice(0, 10);
   const events = state.announcements
-    .filter((x) => !x.lessonId && (admin || x.classroom === 'all' || x.classroom === cls))
-    .filter((x) => !x.date || x.date >= todayStr)
+    .filter((x) => !x.lessonId && (admin || classroomMatches(x.classroom, cls)))
+    .filter((x) => !x.date || (x.endDate || x.date) >= todayStr)
     .sort((a, b) => (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99'))
     .slice(0, 3);
   body.innerHTML = events.length ? events.map((x) => {
-    const meta = [x.date, x.time].filter(Boolean).join(' · ');
+    const meta = [x.endDate && x.endDate !== x.date ? `${x.date} – ${x.endDate}` : x.date, x.time].filter(Boolean).join(' · ');
     return `<div class="rounded-xl border border-line px-3.5 py-3">
       <b class="block">${escapeHtml(x.title)}</b>
       <span class="text-[.88em] text-muted">${escapeHtml(x.text)}</span>
@@ -1233,13 +1248,13 @@ const eventStyles = { event: 'bg-blue-100 text-blue-900', reminder: 'bg-green-10
 function renderAnnouncements() {
   const admin = isAdmin();
   const cls = viewingClass();
-  const events = state.announcements.filter((x) => !x.lessonId && (admin || x.classroom === 'all' || x.classroom === cls));
+  const events = state.announcements.filter((x) => !x.lessonId && (admin || classroomMatches(x.classroom, cls)));
   const replacements = state.announcements.filter((x) => x.lessonId && !x.pending && (admin || x.classroom === cls));
   const eventEl = document.querySelector('#announcementList');
   const replacementEl = document.querySelector('#replacementList');
 
   eventEl.innerHTML = events.length ? events.map((x) => {
-    const meta = [x.date, x.time].filter(Boolean).join(' · ');
+    const meta = [x.endDate && x.endDate !== x.date ? `${x.date} – ${x.endDate}` : x.date, x.time].filter(Boolean).join(' · ');
     return `<article class="relative min-h-[145px] rounded-[25px] p-5 ${eventStyles[x.type] || eventStyles.other}">
       ${admin ? `<div class="absolute right-3 top-3 flex gap-1.5">
         <button class="rounded-lg bg-white/70 px-2 py-1 text-sm font-bold" title="Edytuj" data-edit-announcement="${x.id}">${icon('pencil')}</button>
