@@ -520,7 +520,6 @@ function show(id) {
     pill.style.height = activeBtn.offsetHeight + 'px';
   }
   updateToolsNav(id);
-  if (id !== 'seatingScreen') leaveSeatFullscreen();
   if (id !== 'chessScreen') chessStop();
   if (id !== 'cubeScreen') cubeCancel();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2954,7 +2953,7 @@ function applyToolLayout(screenId, tool) {
     if (!tool) return;
     tool.simpleView = b.dataset.layout === 'simple';
     if (screenId === 'seatingScreen') {
-      if (tool.simpleView) { state.seatEditing = false; state.selectedDesk = null; enterSeatFullscreen(); } else leaveSeatFullscreen();
+      if (tool.simpleView) { state.seatEditing = false; state.selectedDesk = null; }
     }
     saveTeacherTools();
     renderToolScreen();
@@ -3305,31 +3304,25 @@ function seatFontSize(name) {
   const widest = Math.max(...seatName(name).split('\n').map((line) => seatMeasure.measureText(line).width)) / 100; // width at font size 1
   return Math.round(clamp(SEAT_TEXT_WIDTH / Math.max(widest, 0.1), SEAT_FONT_MIN, SEAT_FONT_MAX) * 100) / 100;
 }
-// Simple view: scale the board so the whole room AND the "Losuj miejsca" button fit on the
+// The settings panel on the left stretches from where it starts down to the bottom of the
+// screen (--seat-min-h; only used when the panel sits beside the desks), and in the simple
+// view the board is scaled so the whole room AND the "Losuj miejsca" button fit on the
 // screen at once — the page never has to be scrolled.
 function fitSeatBoard() {
   const screen = document.querySelector('#seatingScreen');
   const wrap = seatBoardEl.parentElement;
-  const overlay = screen.classList.contains('layout-simple'); // the simple view covers the whole window
-  if (!overlay || screen.classList.contains('hidden')) { seatBoardEl.style.width = ''; wrap.style.overflowX = ''; return; }
-  const top = wrap.getBoundingClientRect().top + screen.scrollTop;
-  const cardPad = parseFloat(getComputedStyle(screen.querySelector(':scope > div')).paddingBottom) || 0;
-  const available = window.innerHeight - top - cardPad - 16 - 6; // card padding + overlay padding + slack
+  if (screen.classList.contains('hidden')) return;
+  const layout = screen.querySelector('.seat-layout');
+  const layoutTop = layout.getBoundingClientRect().top + window.scrollY;
+  layout.style.setProperty('--seat-min-h', `${Math.max(0, Math.floor(window.innerHeight - layoutTop - 12))}px`);
+  if (!screen.classList.contains('layout-simple')) { seatBoardEl.style.width = ''; wrap.style.overflowX = ''; return; }
+  const top = wrap.getBoundingClientRect().top + window.scrollY;
+  const available = window.innerHeight - top - 12 - 6; // page bottom padding + slack
   const width = Math.max(260, Math.min(wrap.clientWidth, available * (100 / BOARD_H)));
   seatBoardEl.style.width = `${Math.floor(width)}px`;
   wrap.style.overflowX = 'hidden'; // the board is sized to fit, so no scrollbar
 }
 window.addEventListener('resize', fitSeatBoard);
-// The simple view of the seating tool is a full-window overlay, and choosing it also asks the
-// browser for real full screen (hiding its own bars) where that's allowed. Choosing "Pełny"
-// — or leaving the tool — ends real full screen again. Esc leaves real full screen only.
-function enterSeatFullscreen() {
-  document.querySelector('#seatingScreen').requestFullscreen?.().catch(() => { /* the overlay alone is fine */ });
-}
-function leaveSeatFullscreen() {
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-}
-document.addEventListener('fullscreenchange', fitSeatBoard);
 const seatTool = () => activeClassTool();
 const seatPlanFor = (tool, cls) => (cls && tool.seatPlans?.[cls.id]) || {};
 function renderSeatBoard(animate = false) {
@@ -3388,7 +3381,6 @@ function openSeatingScreen(id) {
   renderSeatingScreen();
   show('seatingScreen');
   fitSeatBoard(); // the screen is only measurable once it is visible
-  if (tool?.simpleView) enterSeatFullscreen(); // opening the tile was a click, so the browser allows it
 }
 
 // Each seated desk flickers through a few random names, then the real one drops in with

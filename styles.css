@@ -61,10 +61,6 @@ body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in 
 .layout-simple [data-technical] { display: none !important; }
 #pickerScreen.layout-simple > .grid { grid-template-columns: minmax(0, 640px); justify-content: center; }
 #seatingScreen.layout-simple .seat-row-no { display: none; }
-/* The simple view is the same overlay as full screen, minus real full screen: the logo,
-   menu and other page chrome are covered; only back, class, draw, clear and the room remain.
-   it sits above the page chrome (menu buttons are z-10) and under the seasonal-effect canvas (z-12), so snow/leaves still fall over it. */
-#seatingScreen.layout-simple { position: fixed; inset: 0; z-index: 11; background: var(--bg); padding: 16px; overflow: auto; }
 .layout-simple [data-simple-hide] { display: none !important; }
 /* Simple view of the seating tool: compact chrome and a board sized by fitSeatBoard() so
    everything is visible without scrolling. */
@@ -218,4 +214,7 @@ body.pattern-panda {
 .seat-stage { min-width: 0; }
 #seatBoard { min-width: 560px; }
 #seatBoard.editing { outline: 2px dashed var(--line); outline-offset: 4px; border-radius: 16px; }
-@media (min-width: 1024px) { .seat-layout { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr); align-items: start; } }
+@media (min-width: 1024px) {
+  .seat-layout { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr); align-items: stretch; }
+  .seat-side { min-height: var(--seat-min-h, 0); }
+}
