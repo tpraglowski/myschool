@@ -3337,6 +3337,7 @@ function renderSeatBoard(animate = false) {
   if (!tool) return;
   const cls = toolClass(tool);
   const plan = seatPlanFor(tool, cls);
+  seatBoardEl.classList.toggle('editing', !!state.seatEditing);
   const { rowOf } = deskRows(tool.desks, tool.manualRows);
   const seated = (d) => (plan[d.id] && cls?.students.includes(plan[d.id]) ? plan[d.id] : null);
   seatBoardEl.innerHTML = '<div class="seat-front">TABLICA</div>' + tool.desks.map((d) => {

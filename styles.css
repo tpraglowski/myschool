@@ -70,13 +70,9 @@ body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in 
    everything is visible without scrolling. */
 #seatingScreen.layout-simple > .h-\[18px\] { height: 8px; }
 #seatingScreen.layout-simple #seatBoard { min-width: 0; }
-#seatingScreen.layout-simple > div { padding: 14px; }
-#seatingScreen.layout-simple .seat-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 10px; }
-#seatingScreen.layout-simple .seat-left { display: flex; flex: 1 1 300px; align-items: center; gap: 10px; min-width: 0; }
-#seatingScreen.layout-simple .seat-left > input { flex: 0 1 170px; width: auto; margin: 0; min-width: 0; }
-#seatingScreen.layout-simple .seat-left > [data-class-bar] { flex: 1 1 150px; min-width: 0; }
+#seatingScreen.layout-simple .seat-side { padding: 14px; }
+#seatingScreen.layout-simple .seat-top { margin-bottom: 0; }
 #seatingScreen.layout-simple .seat-left h3 { display: none; }
-#seatingScreen.layout-simple .seat-actions { justify-content: flex-start; }
 /* All tool screens: tighter page chrome so they fit one screen without scrolling. */
 body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen, #cubeScreen):not(.hidden)) main { padding-bottom: 12px; }
 body:has(:is(#timerScreen, #pickerScreen, #groupsScreen, #seatingScreen, #cubeScreen):not(.hidden)) header { margin-bottom: 14px; }
@@ -212,3 +208,14 @@ body.pattern-panda {
 .chess-time { font-size: clamp(4rem, 22vw, 11rem); font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
 .chess-side small { font-size: 1rem; font-weight: 700; opacity: .85; }
 .chess-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; padding: 8px 12px; background: var(--card); border-block: 1px solid var(--line); }
+
+
+/* Seating tool layout: every setting in a panel on the left, only the desks on the right —
+   no frame, the desks simply lie on the page background (a dashed outline shows the
+   draggable area while editing the layout). Stacks on narrow screens. */
+.seat-layout { display: grid; gap: 16px; }
+.seat-side { border: 1px solid var(--line); border-radius: 22px; background: var(--card); padding: 18px; box-shadow: 0 7px 22px var(--shadow); }
+.seat-stage { min-width: 0; }
+#seatBoard { min-width: 560px; }
+#seatBoard.editing { outline: 2px dashed var(--line); outline-offset: 4px; border-radius: 16px; }
+@media (min-width: 1024px) { .seat-layout { grid-template-columns: minmax(300px, 340px) minmax(0, 1fr); align-items: start; } }
