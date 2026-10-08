@@ -61,6 +61,13 @@ body[class*="season-"] [class*="bg-[#eef0ff]"] { background-color: color-mix(in 
 .layout-simple [data-technical] { display: none !important; }
 #pickerScreen.layout-simple > .grid { grid-template-columns: minmax(0, 640px); justify-content: center; }
 #seatingScreen.layout-simple .seat-row-no { display: none; }
+/* Simple view = "full page": the seating screen covers the whole window (no logo, menu or
+   other page chrome, like the Random Seat site) without using the browser's full screen.
+   The pinned-tools bar (when this tool is pinned) floats at the top of it. z-index 11 is
+   above the page's menu buttons (z-10) and under the seasonal-effect canvas (z-12). */
+#seatingScreen.layout-simple { position: fixed; inset: 0; z-index: 11; background: var(--bg); padding: 16px; overflow: auto; }
+body:has(#seatingScreen.layout-simple:not(.hidden)) #toolsNav:not(.hidden) { position: fixed; top: 12px; left: 16px; z-index: 12; margin: 0; }
+body:has(#seatingScreen.layout-simple:not(.hidden)):has(#toolsNav:not(.hidden)) #seatingScreen { padding-top: 64px; }
 .layout-simple [data-simple-hide] { display: none !important; }
 /* Simple view of the seating tool: compact chrome and a board sized by fitSeatBoard() so
    everything is visible without scrolling. */

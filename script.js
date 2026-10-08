@@ -3306,18 +3306,22 @@ function seatFontSize(name) {
 }
 // The settings panel on the left stretches from where it starts down to the bottom of the
 // screen (--seat-min-h; only used when the panel sits beside the desks), and in the simple
-// view the board is scaled so the whole room AND the "Losuj miejsca" button fit on the
-// screen at once — the page never has to be scrolled.
+// view ("full page": an overlay over the whole window, no logo/menu — but not the browser's
+// full screen) the board is scaled so the whole room AND the "Losuj miejsca" button fit on
+// the screen at once — nothing has to be scrolled.
 function fitSeatBoard() {
   const screen = document.querySelector('#seatingScreen');
   const wrap = seatBoardEl.parentElement;
   if (screen.classList.contains('hidden')) return;
+  const simple = screen.classList.contains('layout-simple'); // "full page": covers the whole window (not browser full screen)
+  const scrolled = simple ? screen.scrollTop : window.scrollY;
+  const bottomPad = simple ? 16 : 12;
   const layout = screen.querySelector('.seat-layout');
-  const layoutTop = layout.getBoundingClientRect().top + window.scrollY;
-  layout.style.setProperty('--seat-min-h', `${Math.max(0, Math.floor(window.innerHeight - layoutTop - 12))}px`);
-  if (!screen.classList.contains('layout-simple')) { seatBoardEl.style.width = ''; wrap.style.overflowX = ''; return; }
-  const top = wrap.getBoundingClientRect().top + window.scrollY;
-  const available = window.innerHeight - top - 12 - 6; // page bottom padding + slack
+  const layoutTop = layout.getBoundingClientRect().top + scrolled;
+  layout.style.setProperty('--seat-min-h', `${Math.max(0, Math.floor(window.innerHeight - layoutTop - bottomPad))}px`);
+  if (!simple) { seatBoardEl.style.width = ''; wrap.style.overflowX = ''; return; }
+  const top = wrap.getBoundingClientRect().top + scrolled;
+  const available = window.innerHeight - top - bottomPad - 6; // bottom padding + slack
   const width = Math.max(260, Math.min(wrap.clientWidth, available * (100 / BOARD_H)));
   seatBoardEl.style.width = `${Math.floor(width)}px`;
   wrap.style.overflowX = 'hidden'; // the board is sized to fit, so no scrollbar
