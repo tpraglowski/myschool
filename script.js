@@ -3698,12 +3698,14 @@ const cubeSeconds = (tool) => (tool.turnSeconds > 0 ? tool.turnSeconds : CUBE_DE
 const formatCube = (ms) => `${(Math.max(0, ms) / 1000).toFixed(1)}`;
 const cubeRun = { phase: 'idle', t0: 0, timer: 0, note: '', noteTimer: 0, advanceTimer: 0 };
 const cubePadEl = document.querySelector('#cubePad');
-const CUBE_HINTS = { idle: 'Dotknij pole (lub spację), żeby ruszyć odliczanie', running: 'Dotknij, gdy skończy — zapiszę jego czas', timeup: 'Koniec czasu!' };
+const CUBE_HINTS = { idle: 'Dotknij pole (lub spację), żeby ruszyć odliczanie', running: 'Dotknij, gdy skończy — zapiszę czas i od razu ruszy następny', timeup: 'Koniec czasu!' };
 function cubeSetPhase(phase) {
   cubeRun.phase = phase;
   cubePadEl.classList.toggle('timeup', phase === 'timeup');
   if (phase !== 'running') cubePadEl.classList.remove('low');
   document.querySelector('#cubeHint').textContent = cubeRun.note || CUBE_HINTS[phase];
+  document.querySelector('#cubeStop').disabled = phase !== 'running';
+  document.querySelector('#cubeSkip').disabled = phase !== 'idle';
 }
 function cubeCancel() {
   clearInterval(cubeRun.timer);
@@ -3794,7 +3796,6 @@ function cubeLoop() {
   cubePadEl.classList.toggle('low', remaining <= 10000);
 }
 function cubeStart() {
-  cubeRun.note = '';
   cubeRun.t0 = performance.now();
   cubeSetPhase('running');
   clearInterval(cubeRun.timer);
@@ -3807,7 +3808,7 @@ function cubeFinish() {
   const used = Math.min(cubeSeconds(tool) * 1000, performance.now() - cubeRun.t0);
   clearInterval(cubeRun.timer);
   cubeRecord(Math.round(used));
-  cubeSetPhase('idle');
+  cubeStart();   // the next competitor's countdown starts right away
   renderCube();
 }
 function cubeTimeUp() {
@@ -3817,7 +3818,7 @@ function cubeTimeUp() {
   cubeRecord(null);
   cubeSetPhase('timeup');
   clearTimeout(cubeRun.advanceTimer);
-  cubeRun.advanceTimer = setTimeout(() => { cubeSetPhase('idle'); renderCube(); }, 1800); // then the next competitor is up
+  cubeRun.advanceTimer = setTimeout(() => { cubeStart(); renderCube(); }, 1800); // then the next competitor's countdown starts
   renderCube();
 }
 function cubeTap() {
@@ -3844,6 +3845,13 @@ document.querySelector('#cubePlayers').addEventListener('click', (e) => {
   if (!b || !tool || cubeRun.phase !== 'idle') return;
   tool.activeParticipant = b.dataset.cubePlayer;
   saveTeacherTools();
+  renderCube();
+});
+document.querySelector('#cubeStop').addEventListener('click', () => {
+  if (cubeRun.phase !== 'running') return;
+  clearInterval(cubeRun.timer);   // stops the chain; nothing is saved for the unfinished turn
+  cubeRun.note = '';
+  cubeSetPhase('idle');
   renderCube();
 });
 document.querySelector('#cubeSkip').addEventListener('click', () => {
