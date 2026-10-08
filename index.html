@@ -25,7 +25,7 @@
       },
     };
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261007c" />
+  <link rel="stylesheet" href="styles.css?v=20261008b" />
 </head>
 <body class="min-h-screen bg-app font-sans text-ink transition-colors">
   <main class="mx-auto w-[calc(100%-2rem)] max-w-[1120px] pb-11 pt-7">
@@ -353,10 +353,16 @@
           <h2 class="mb-1 text-[1.2em] font-bold tracking-tight">Licznik do kostki Rubika</h2>
           <p class="mb-3 font-bold" id="cubePlayerName"></p>
           <button class="cube-pad" id="cubePad" type="button" aria-label="Pole startu i stopu">
-            <span class="cube-display" id="cubeDisplay">0.00</span>
+            <span class="cube-display" id="cubeDisplay">40.0</span>
             <small class="cube-hint" id="cubeHint"></small>
           </button>
           <div class="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4" id="cubeStats"></div>
+          <div class="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm">
+            <label class="flex items-center gap-2 font-bold">Czas na turę (s)
+              <input class="w-20 rounded-lg border border-line bg-app px-2 py-1.5 text-center text-ink" id="cubeSeconds" type="number" min="5" max="600" step="1" value="40" />
+            </label>
+            <button class="rounded-lg bg-app px-3 py-1.5 font-bold text-muted" id="cubeSkip" type="button">Pomiń zawodnika →</button>
+          </div>
         </div>
         <div class="rounded-[22px] border border-line bg-card p-[22px] shadow-[0_7px_22px_var(--shadow)]">
           <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Zawodnicy</h3>
@@ -366,7 +372,7 @@
             <input class="h-10 w-10 cursor-pointer rounded-lg border border-line p-0" id="cubeNewColor" type="color" aria-label="Kolor zawodnika" />
             <button class="rounded-lg bg-primary px-3 py-2 font-extrabold text-white" id="cubeAdd" type="button">Dodaj</button>
           </div>
-          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Ranking (najlepszy czas)</h3>
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Ranking (najkrótszy czas)</h3>
           <ol class="mb-4 grid gap-1 text-sm" id="cubeBoard"></ol>
           <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-muted" id="cubeTimesTitle">Czasy</h3>
           <div class="mb-3 flex flex-wrap gap-1.5 text-sm" id="cubeTimes"></div>
@@ -931,6 +937,6 @@
     </div>
     <div class="db-label" id="dbLabel">Cicho</div>
   </aside>
-  <script type="module" src="script.js?v=20261007c"></script>
+  <script type="module" src="script.js?v=20261008b"></script>
 </body>
 </html>

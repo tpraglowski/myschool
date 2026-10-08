@@ -2248,7 +2248,7 @@ const toolTypes = [
 // Tools with `pinnable: false` (the extra ones) are listed at the bottom of Teacher Tools
 // under a divider and can't be pinned.
 toolTypes.push(
-  { type: 'cube', icon: 'cube', name: 'Licznik do kostki Rubika', pinnable: false, description: 'Pomiar czasu układania kostki dla wielu zawodników, każdy ma swój kolor i ranking' },
+  { type: 'cube', icon: 'cube', name: 'Licznik do kostki Rubika', pinnable: false, description: 'Odliczanie 40 s na turę każdego zawodnika (każdy ma swój kolor), z zapisem czasów i rankingiem' },
   { type: 'chess', icon: 'swap', name: 'Zegar szachowy', pinnable: false, description: 'Dwa zegary na pełnym ekranie: dotknij swojej strony, żeby oddać ruch' },
 );
 const toolPinnable = (tool) => toolTypeInfo(tool.type).pinnable !== false;
@@ -2264,7 +2264,7 @@ function makeTool(type) {
   if (type === 'picker' || type === 'groups' || type === 'seating') tool.classId = teacherClasses().length === 1 ? teacherClasses()[0].id : null;
   if (type === 'seating') Object.assign(tool, { desks: defaultDesks(), seatPlans: {} });
   if (type === 'groups') Object.assign(tool, { groupMode: 'count', groupValue: 2 });
-  if (type === 'cube') Object.assign(tool, { participants: [{ id: crypto.randomUUID(), name: 'Zawodnik 1', color: CUBE_COLORS[0], times: [] }], activeParticipant: null });
+  if (type === 'cube') Object.assign(tool, { participants: [{ id: crypto.randomUUID(), name: 'Zawodnik 1', color: CUBE_COLORS[0], times: [] }], activeParticipant: null, turnSeconds: 40 });
   if (type === 'chess') Object.assign(tool, { minutes: 5, increment: 0, rotateTop: true });
   return tool;
 }
@@ -3683,45 +3683,57 @@ const endSeatDrag = () => {
 seatBoardEl.addEventListener('pointerup', endSeatDrag);
 seatBoardEl.addEventListener('pointercancel', endSeatDrag);
 
-// ---------- Extra tool: Rubik's cube timer ----------
-// Several competitors, each with their own colour, times and a ranking by best time.
-// Hold the pad (or Space) until it turns green, release to start, touch again to stop —
-// like a speedcubing timer. Everything is stored on the teacher's own account.
+// ---------- Extra tool: Rubik's cube countdown ----------
+// A turn-based countdown: every competitor (each with their own colour) gets TURN seconds
+// (default 40) on their turn. Tap the pad (or Space) to start the countdown; tap again if
+// they finish early — the time used is saved and the next competitor is up. If it reaches
+// zero the turn counts as "time's up" and the next competitor is up. A ranking by best
+// time is kept. Everything is stored on the teacher's own account.
 const CUBE_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#84cc16', '#f43f5e', '#a855f7'];
 const CUBE_MAX_PLAYERS = 12;
+const CUBE_DEFAULT_SECONDS = 40;
 const cubeTool = () => teacherToolsFor().find((t) => t.id === state.activeCube);
 const cubePlayer = (tool) => tool.participants.find((p) => p.id === tool.activeParticipant) || tool.participants[0];
-function formatCube(ms) {
-  const total = Math.max(0, Math.round(ms / 10));
-  const cs = String(total % 100).padStart(2, '0');
-  const sec = Math.floor(total / 100) % 60;
-  const min = Math.floor(total / 6000);
-  return min ? `${min}:${String(sec).padStart(2, '0')}.${cs}` : `${sec}.${cs}`;
-}
-const cubeRun = { phase: 'idle', t0: 0, raf: 0, hold: 0, armed: null };
+const cubeSeconds = (tool) => (tool.turnSeconds > 0 ? tool.turnSeconds : CUBE_DEFAULT_SECONDS);
+const formatCube = (ms) => `${(Math.max(0, ms) / 1000).toFixed(1)}`;
+const cubeRun = { phase: 'idle', t0: 0, timer: 0, note: '', noteTimer: 0, advanceTimer: 0 };
 const cubePadEl = document.querySelector('#cubePad');
-const CUBE_HINTS = { idle: 'Przytrzymaj pole (lub spację), aż zzielenieje — puść, żeby zacząć', holding: 'Trzymaj…', ready: 'Puść, żeby zacząć!', running: 'Dotknij, żeby zatrzymać' };
+const CUBE_HINTS = { idle: 'Dotknij pole (lub spację), żeby ruszyć odliczanie', running: 'Dotknij, gdy skończy — zapiszę jego czas', timeup: 'Koniec czasu!' };
 function cubeSetPhase(phase) {
   cubeRun.phase = phase;
-  cubePadEl.classList.toggle('holding', phase === 'holding');
-  cubePadEl.classList.toggle('ready', phase === 'ready');
-  document.querySelector('#cubeHint').textContent = CUBE_HINTS[phase];
+  cubePadEl.classList.toggle('timeup', phase === 'timeup');
+  if (phase !== 'running') cubePadEl.classList.remove('low');
+  document.querySelector('#cubeHint').textContent = cubeRun.note || CUBE_HINTS[phase];
 }
 function cubeCancel() {
-  clearTimeout(cubeRun.hold);
-  cancelAnimationFrame(cubeRun.raf);
+  clearInterval(cubeRun.timer);
+  clearTimeout(cubeRun.advanceTimer);
+  clearTimeout(cubeRun.noteTimer);
   cubeRun.phase = 'idle';
-  cubePadEl.classList.remove('holding', 'ready');
+  cubeRun.note = '';
+  cubePadEl.classList.remove('low', 'timeup');
 }
 function cubeStats(times) {
-  if (!times.length) return { best: null, last: null, ao5: null, mean: null };
-  const last5 = times.slice(-5);
-  let ao5 = null;
-  if (last5.length === 5) {
-    const sorted = [...last5].sort((a, b) => a - b);
-    ao5 = (sorted[1] + sorted[2] + sorted[3]) / 3;
-  }
-  return { best: Math.min(...times), last: times[times.length - 1], ao5, mean: times.reduce((a, b) => a + b, 0) / times.length };
+  const done = times.filter((t) => t !== null);
+  return {
+    best: done.length ? Math.min(...done) : null,
+    last: times.length ? times[times.length - 1] : undefined,
+    mean: done.length ? done.reduce((x, y) => x + y, 0) / done.length : null,
+    timeouts: times.length - done.length,
+  };
+}
+function cubeBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = 880;
+    gain.gain.value = 0.15;
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+    setTimeout(() => ctx.close().catch(() => {}), 800);
+  } catch { /* no sound available */ }
 }
 function renderCube() {
   const tool = cubeTool();
@@ -3729,67 +3741,93 @@ function renderCube() {
   const player = cubePlayer(tool);
   tool.activeParticipant = player.id;
   cubePadEl.style.setProperty('--pc', player.color);
-  document.querySelector('#cubePlayerName').innerHTML = `<span class="inline-block h-3 w-3 rounded-full align-baseline" style="background:${player.color}"></span> ${escapeHtml(player.name)}`;
-  if (cubeRun.phase !== 'running') document.querySelector('#cubeDisplay').textContent = formatCube(player.times[player.times.length - 1] || 0);
+  document.querySelector('#cubePlayerName').innerHTML = `<span class="inline-block h-3 w-3 rounded-full align-baseline" style="background:${player.color}"></span> ${escapeHtml(player.name)} — ich tura`;
+  if (cubeRun.phase === 'idle') document.querySelector('#cubeDisplay').textContent = formatCube(cubeSeconds(tool) * 1000);
   cubeSetPhase(cubeRun.phase);
   const st = cubeStats(player.times);
-  const stat = (label, value) => `<div class="rounded-xl bg-app px-2 py-2"><span class="block text-xs text-muted">${label}</span><b>${value === null ? '—' : formatCube(value)}</b></div>`;
-  document.querySelector('#cubeStats').innerHTML = stat('Najlepszy', st.best) + stat('Ostatni', st.last) + stat('Średnia z 5', st.ao5) + stat('Średnia', st.mean);
+  const stat = (label, value) => `<div class="rounded-xl bg-app px-2 py-2"><span class="block text-xs text-muted">${label}</span><b>${value === null || value === undefined ? '—' : value}</b></div>`;
+  const sec = (ms) => (ms === null || ms === undefined ? null : `${formatCube(ms)} s`);
+  document.querySelector('#cubeStats').innerHTML = stat('Najlepszy', sec(st.best)) + stat('Ostatni', st.last === null ? 'Nie zdążył' : sec(st.last)) + stat('Średnia', sec(st.mean)) + stat('Nie zdążył', st.timeouts);
   document.querySelector('#cubePlayers').innerHTML = tool.participants.map((p) =>
     `<button type="button" class="inline-flex items-center gap-1.5 rounded-lg border-2 px-2.5 py-1 text-sm font-bold" style="border-color:${p.color};${p.id === player.id ? `background:${p.color};color:#fff` : ''}" data-cube-player="${p.id}">${escapeHtml(p.name)}</button>`).join('');
-  const ranked = tool.participants.map((p) => ({ p, best: p.times.length ? Math.min(...p.times) : null })).filter((x) => x.best !== null).sort((a, b) => a.best - b.best);
+  const ranked = tool.participants.map((p) => ({ p, best: cubeStats(p.times).best })).filter((x) => x.best !== null).sort((x, y) => x.best - y.best);
   document.querySelector('#cubeBoard').innerHTML = ranked.length
-    ? ranked.map((x, i) => `<li class="flex items-center gap-2 rounded-lg bg-app px-2.5 py-1.5"><b class="w-5 text-muted">${i + 1}.</b><span class="h-3 w-3 shrink-0 rounded-full" style="background:${x.p.color}"></span><span class="min-w-0 flex-1 truncate font-bold">${escapeHtml(x.p.name)}</span><b class="tabular-nums">${formatCube(x.best)}</b></li>`).join('')
-    : '<li class="text-muted">Brak czasów.</li>';
-  document.querySelector('#cubeTimesTitle').textContent = `Czasy: ${player.name}`;
+    ? ranked.map((x, i) => `<li class="flex items-center gap-2 rounded-lg bg-app px-2.5 py-1.5"><b class="w-5 text-muted">${i + 1}.</b><span class="h-3 w-3 shrink-0 rounded-full" style="background:${x.p.color}"></span><span class="min-w-0 flex-1 truncate font-bold">${escapeHtml(x.p.name)}</span><b class="tabular-nums">${formatCube(x.best)} s</b></li>`).join('')
+    : '<li class="text-muted">Brak wyników.</li>';
+  document.querySelector('#cubeTimesTitle').textContent = `Wyniki: ${player.name}`;
   const recent = player.times.map((t, i) => ({ t, i })).slice(-14).reverse();
   document.querySelector('#cubeTimes').innerHTML = recent.length
-    ? recent.map(({ t, i }) => `<span class="inline-flex items-center gap-1 rounded-lg bg-app px-2 py-1 font-bold tabular-nums" style="border-left:4px solid ${player.color}">${formatCube(t)}<button type="button" class="text-muted" data-cube-del-time="${i}" aria-label="Usuń czas">×</button></span>`).join('')
-    : '<span class="text-muted">Jeszcze nie ma czasów.</span>';
+    ? recent.map(({ t, i }) => `<span class="inline-flex items-center gap-1 rounded-lg bg-app px-2 py-1 font-bold tabular-nums" style="border-left:4px solid ${t === null ? '#dc2626' : player.color}">${t === null ? '<span class="text-red-600">Nie zdążył</span>' : `${formatCube(t)} s`}<button type="button" class="text-muted" data-cube-del-time="${i}" aria-label="Usuń wynik">×</button></span>`).join('')
+    : '<span class="text-muted">Jeszcze nie ma wyników.</span>';
+  document.querySelector('#cubeSeconds').value = String(cubeSeconds(tool));
   document.querySelector('#cubeClear').disabled = !player.times.length;
   document.querySelector('#cubeRemove').disabled = tool.participants.length < 2;
 }
-function cubeLoop() {
-  if (cubeRun.phase !== 'running') return;
-  document.querySelector('#cubeDisplay').textContent = formatCube(performance.now() - cubeRun.t0);
-  cubeRun.raf = requestAnimationFrame(cubeLoop);
-}
-function cubeStart() {
-  cubeRun.t0 = performance.now();
-  cubeSetPhase('running');
-  cubeLoop();
-}
-function cubeStop() {
+function cubeNext() {
   const tool = cubeTool();
-  const elapsed = performance.now() - cubeRun.t0;
-  cancelAnimationFrame(cubeRun.raf);
-  cubeSetPhase('idle');
+  if (!tool) return;
+  const i = tool.participants.findIndex((p) => p.id === tool.activeParticipant);
+  tool.activeParticipant = tool.participants[(i + 1) % tool.participants.length].id;
+}
+function cubeShowNote(text) {
+  cubeRun.note = text;
+  clearTimeout(cubeRun.noteTimer);
+  cubeRun.noteTimer = setTimeout(() => { cubeRun.note = ''; cubeSetPhase(cubeRun.phase); }, 2500);
+}
+function cubeRecord(value) {
+  const tool = cubeTool();
   if (!tool) return;
   const player = cubePlayer(tool);
-  player.times.push(Math.round(elapsed));
+  player.times.push(value);
   if (player.times.length > 300) player.times.splice(0, player.times.length - 300);
+  cubeShowNote(value === null ? `${player.name}: nie zdążył` : `${player.name}: ${formatCube(value)} s`);
+  cubeNext();
   saveTeacherTools();
+}
+function cubeLoop() {
+  if (cubeRun.phase !== 'running') return;
+  const tool = cubeTool();
+  if (!tool) return;
+  const remaining = cubeSeconds(tool) * 1000 - (performance.now() - cubeRun.t0);
+  if (remaining <= 0) { cubeTimeUp(); return; }
+  document.querySelector('#cubeDisplay').textContent = formatCube(remaining);
+  cubePadEl.classList.toggle('low', remaining <= 10000);
+}
+function cubeStart() {
+  cubeRun.note = '';
+  cubeRun.t0 = performance.now();
+  cubeSetPhase('running');
+  clearInterval(cubeRun.timer);
+  cubeRun.timer = setInterval(cubeLoop, 50); // a timer (not rAF) so the countdown keeps ending turns even in a background tab
+  cubeLoop();
+}
+function cubeFinish() {
+  const tool = cubeTool();
+  if (!tool) return;
+  const used = Math.min(cubeSeconds(tool) * 1000, performance.now() - cubeRun.t0);
+  clearInterval(cubeRun.timer);
+  cubeRecord(Math.round(used));
+  cubeSetPhase('idle');
   renderCube();
-  document.querySelector('#cubeDisplay').textContent = formatCube(elapsed);
 }
-function cubePress() {
+function cubeTimeUp() {
+  clearInterval(cubeRun.timer);
+  document.querySelector('#cubeDisplay').textContent = formatCube(0);
+  cubeBeep();
+  cubeRecord(null);
+  cubeSetPhase('timeup');
+  clearTimeout(cubeRun.advanceTimer);
+  cubeRun.advanceTimer = setTimeout(() => { cubeSetPhase('idle'); renderCube(); }, 1800); // then the next competitor is up
+  renderCube();
+}
+function cubeTap() {
   if (!cubeTool()) return;
-  if (cubeRun.phase === 'running') { cubeStop(); return; }
-  if (cubeRun.phase !== 'idle') return;
-  cubeSetPhase('holding');
-  cubeRun.hold = setTimeout(() => { if (cubeRun.phase === 'holding') cubeSetPhase('ready'); }, 300);
+  if (cubeRun.phase === 'running') cubeFinish();
+  else if (cubeRun.phase === 'idle') cubeStart();
 }
-function cubeRelease() {
-  clearTimeout(cubeRun.hold);
-  if (cubeRun.phase === 'ready') cubeStart();
-  else if (cubeRun.phase === 'holding') cubeSetPhase('idle');
-}
-cubePadEl.addEventListener('pointerdown', (e) => { e.preventDefault(); cubePress(); });
-cubePadEl.addEventListener('pointerup', cubeRelease);
-cubePadEl.addEventListener('pointercancel', () => { clearTimeout(cubeRun.hold); if (cubeRun.phase === 'holding' || cubeRun.phase === 'ready') cubeSetPhase('idle'); });
+cubePadEl.addEventListener('pointerdown', (e) => { e.preventDefault(); cubeTap(); });
 const cubeKeyTarget = (e) => !document.querySelector('#cubeScreen').classList.contains('hidden') && e.code === 'Space' && !e.target.closest?.('input, textarea, select') && !(e.target.closest?.('button') && e.target !== cubePadEl);
-document.addEventListener('keydown', (e) => { if (cubeKeyTarget(e)) { e.preventDefault(); if (!e.repeat) cubePress(); } });
-document.addEventListener('keyup', (e) => { if (cubeKeyTarget(e)) { e.preventDefault(); cubeRelease(); } });
+document.addEventListener('keydown', (e) => { if (cubeKeyTarget(e)) { e.preventDefault(); if (!e.repeat) cubeTap(); } });
 // Two-step buttons (first click arms for 4 s, second confirms) — no native dialogs.
 function twoStep(button, idleText, armedText, action) {
   let timer = null;
@@ -3803,8 +3841,14 @@ function twoStep(button, idleText, armedText, action) {
 document.querySelector('#cubePlayers').addEventListener('click', (e) => {
   const b = e.target.closest('[data-cube-player]');
   const tool = cubeTool();
-  if (!b || !tool || cubeRun.phase === 'running') return;
+  if (!b || !tool || cubeRun.phase !== 'idle') return;
   tool.activeParticipant = b.dataset.cubePlayer;
+  saveTeacherTools();
+  renderCube();
+});
+document.querySelector('#cubeSkip').addEventListener('click', () => {
+  if (cubeRun.phase !== 'idle') return;
+  cubeNext();
   saveTeacherTools();
   renderCube();
 });
@@ -3816,6 +3860,13 @@ document.querySelector('#cubeTimes').addEventListener('click', (e) => {
   saveTeacherTools();
   renderCube();
 });
+document.querySelector('#cubeSeconds').addEventListener('change', (e) => {
+  const tool = cubeTool();
+  if (!tool || cubeRun.phase !== 'idle') { renderCube(); return; }
+  tool.turnSeconds = Math.min(600, Math.max(5, Math.round(Number(e.target.value)) || CUBE_DEFAULT_SECONDS));
+  saveTeacherTools();
+  renderCube();
+});
 document.querySelector('#cubeAdd').addEventListener('click', () => {
   const tool = cubeTool();
   if (!tool || tool.participants.length >= CUBE_MAX_PLAYERS) return;
@@ -3823,14 +3874,13 @@ document.querySelector('#cubeAdd').addEventListener('click', () => {
   const name = capitalize(input.value.trim()) || `Zawodnik ${tool.participants.length + 1}`;
   const player = { id: crypto.randomUUID(), name, color: document.querySelector('#cubeNewColor').value, times: [] };
   tool.participants.push(player);
-  tool.activeParticipant = player.id;
   input.value = '';
   document.querySelector('#cubeNewColor').value = CUBE_COLORS[tool.participants.length % CUBE_COLORS.length];
   saveTeacherTools();
   renderCube();
 });
 document.querySelector('#cubeNewName').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.querySelector('#cubeAdd').click(); });
-twoStep(document.querySelector('#cubeClear'), 'Wyczyść czasy', 'Na pewno? Kliknij ponownie', () => {
+twoStep(document.querySelector('#cubeClear'), 'Wyczyść wyniki', 'Na pewno? Kliknij ponownie', () => {
   const tool = cubeTool();
   if (!tool) return;
   cubePlayer(tool).times = [];
